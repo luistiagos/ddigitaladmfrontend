@@ -205,8 +205,8 @@ export default function Dashboard() {
             <NotConfiguredCard label="MercadoPago" />
           )}
 
-          {/* Total Despesas */}
-          {hasExpenses && (
+          {/* Total Despesas — só quando todos os providers carregaram */}
+          {hasExpenses && (!metaOk || !loadingFb || fbError) && !loadingStats && (
             <KpiCard
               icon={<Receipt className="h-4 w-4" />}
               label="Total Despesas"
@@ -215,8 +215,8 @@ export default function Dashboard() {
             />
           )}
 
-          {/* Lucro Bruto */}
-          {lucroBruto !== null && (
+          {/* Lucro Bruto — só quando todos os providers carregaram */}
+          {lucroBruto !== null && (!metaOk || !loadingFb || fbError) && !loadingStats && (
             <KpiCard
               icon={<DollarSign className="h-4 w-4" />}
               label="Lucro Bruto"

@@ -32,7 +32,10 @@ export function isAuthenticated() {
     // Expiração não é checada no cliente — o servidor rejeita tokens inválidos
     const parts = token.split('.');
     if (parts.length !== 3) return false;
-    JSON.parse(atob(parts[1])); // valida que o payload é JSON
+    // JWT usa base64url (- e _); atob requer base64 padrão (+ e /)
+    const raw = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = raw + '='.repeat((4 - raw.length % 4) % 4);
+    JSON.parse(atob(padded)); // valida que o payload é JSON
     return true;
   } catch {
     return false;

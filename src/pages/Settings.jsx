@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, Save, CheckCircle, Settings2 } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import { getSettings, saveSettings, hasProvider } from '@/utils/settings';
@@ -93,6 +93,9 @@ export default function Settings() {
   const [form, setForm] = useState(getSettings);
   const [show, setShow] = useState({});
   const [saved, setSaved] = useState(false);
+  const savedTimerRef = useRef(null);
+
+  useEffect(() => () => { clearTimeout(savedTimerRef.current); }, []);
 
   function toggleShow(id) {
     setShow((s) => ({ ...s, [id]: !s[id] }));
@@ -105,7 +108,8 @@ export default function Settings() {
   function handleSave() {
     saveSettings(form);
     setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSaved(false), 3000);
   }
 
   return (
