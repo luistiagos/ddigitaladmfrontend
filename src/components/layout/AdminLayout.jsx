@@ -11,6 +11,7 @@ import {
   X,
   Send,
   Gamepad2,
+  Settings2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SendProductModal from '@/modals/SendProductModal';
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { to: '/vendas', label: 'Vendas', icon: ShoppingCart },
   { to: '/disputas', label: 'Disputas', icon: AlertOctagon },
   { to: '/leads', label: 'Leads', icon: Target },
+  { to: '/configuracoes', label: 'Configurações', icon: Settings2 },
 ];
 
 function NavItem({ to, label, icon: Icon, end, onClick }) {

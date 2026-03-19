@@ -9,6 +9,7 @@ import Clients from '@/pages/Clients';
 import Sales from '@/pages/Sales';
 import Disputes from '@/pages/Disputes';
 import Leads from '@/pages/Leads';
+import Settings from '@/pages/Settings';
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="vendas" element={<Sales />} />
             <Route path="disputas" element={<Disputes />} />
             <Route path="leads" element={<Leads />} />
+            <Route path="configuracoes" element={<Settings />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
