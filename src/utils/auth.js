@@ -28,8 +28,12 @@ export function isAuthenticated() {
   const token = getToken();
   if (!token) return false;
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp * 1000 > Date.now();
+    // Verifica apenas que o token é um JWT válido (3 partes)
+    // Expiração não é checada no cliente — o servidor rejeita tokens inválidos
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    JSON.parse(atob(parts[1])); // valida que o payload é JSON
+    return true;
   } catch {
     return false;
   }
