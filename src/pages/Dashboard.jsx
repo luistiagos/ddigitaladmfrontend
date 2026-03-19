@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2 } from 'lucide-react';
+import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '@/services/api';
 import { formatCurrency, todayISO } from '@/utils/format';
@@ -152,6 +152,40 @@ export default function Dashboard() {
                 value={formatCurrency(approvedTotal)}
                 sub="Apenas aprovadas"
                 color="violet"
+              />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Falhas / Estornos */}
+      <div className="mb-6">
+        <SectionTitle>Falhas &amp; Estornos</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {loadingStats ? (
+            <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
+          ) : (
+            <>
+              <KpiCard
+                icon={<XCircle className="h-4 w-4" />}
+                label="Pagamentos Falhos"
+                value={stats?.failed_count ?? '—'}
+                sub="payment_failed"
+                color="red"
+              />
+              <KpiCard
+                icon={<RotateCcw className="h-4 w-4" />}
+                label="Revertidos / Estornados"
+                value={stats?.reverted_count ?? '—'}
+                sub="reverted + refunded"
+                color="orange"
+              />
+              <KpiCard
+                icon={<ShieldAlert className="h-4 w-4" />}
+                label="Chargebacks"
+                value={stats?.chargeback_count ?? '—'}
+                sub="charged_back + mediação"
+                color="red"
               />
             </>
           )}

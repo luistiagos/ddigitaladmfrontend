@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Copy, Check, MessageCircle, Mail } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import Pagination from '@/components/ui/Pagination';
@@ -8,12 +8,44 @@ import { formatDateTime, todayISO } from '@/utils/format';
 
 const PER_PAGE = 20;
 const getEmptyFilters = () => ({
-  has_email: false, status: '',
-  start_date: todayISO(), end_date: todayISO(),
+  has_email: false,
+  status: '',
+  exclude_status: '',
+  store_id: '',
+  start_date: todayISO(),
+  end_date: todayISO(),
 });
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy(e) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copiar"
+      className="ml-1.5 p-0.5 rounded text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
+
+function whatsappLink(phone) {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  const number = digits.startsWith('55') ? digits : `55${digits}`;
+  return `https://wa.me/${number}`;
+}
 
 export default function Leads() {
   const [statuses, setStatuses] = useState([]);
+  const [stores, setStores] = useState([]);
   const [filters, setFilters] = useState(getEmptyFilters);
   const [applied, setApplied] = useState(getEmptyFilters);
   const [page, setPage] = useState(1);
@@ -23,6 +55,7 @@ export default function Leads() {
 
   useEffect(() => {
     api.get('/admin/leads/statuses').then((r) => setStatuses(r.data.statuses || [])).catch(() => {});
+    api.get('/admin/stores').then((r) => setStores(r.data.stores || [])).catch(() => {});
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -32,6 +65,8 @@ export default function Leads() {
       const params = new URLSearchParams({ page, per_page: PER_PAGE });
       if (applied.has_email) params.set('has_email', '1');
       if (applied.status) params.set('status', applied.status);
+      if (applied.exclude_status) params.set('exclude_status', applied.exclude_status);
+      if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
       const res = await api.get(`/admin/leads?${params}`);
@@ -57,7 +92,7 @@ export default function Leads() {
 
       {/* Filters */}
       <form onSubmit={applyFilters} className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <select
             value={filters.status}
             onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
@@ -65,6 +100,22 @@ export default function Leads() {
           >
             <option value="">Todos os status</option>
             {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select
+            value={filters.exclude_status}
+            onChange={(e) => setFilters((f) => ({ ...f, exclude_status: e.target.value }))}
+            className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          >
+            <option value="">Excluir status...</option>
+            {statuses.map((s) => <option key={s} value={s}>≠ {s}</option>)}
+          </select>
+          <select
+            value={filters.store_id}
+            onChange={(e) => setFilters((f) => ({ ...f, store_id: e.target.value }))}
+            className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          >
+            <option value="">Todas as lojas</option>
+            {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <input type="date" value={filters.start_date} onChange={(e) => setFilters((f) => ({ ...f, start_date: e.target.value }))}
             className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500" />
@@ -96,7 +147,7 @@ export default function Leads() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700">
-                {['E-mail', 'Produto', 'IP', 'Data', 'Status'].map((h) => (
+                {['E-mail', 'Telefone', 'Produto', 'Data', 'Status'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -107,9 +158,45 @@ export default function Leads() {
               {!loading && !error && data.items.length === 0 && <EmptyRow cols={5} message="Nenhum lead encontrado." />}
               {!loading && !error && data.items.map((row) => (
                 <tr key={row.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                  <td className="px-4 py-3 text-white">{row.email || <span className="text-gray-600 italic">sem e-mail</span>}</td>
+                  {/* E-mail */}
+                  <td className="px-4 py-3">
+                    {row.email ? (
+                      <div className="flex items-center gap-0.5">
+                        <a
+                          href={`mailto:${row.email}`}
+                          className="text-violet-400 hover:text-violet-300 hover:underline underline-offset-2 transition-colors"
+                          title="Enviar e-mail"
+                        >
+                          <Mail className="h-3.5 w-3.5 inline mr-1 opacity-70" />
+                          {row.email}
+                        </a>
+                        <CopyButton text={row.email} />
+                      </div>
+                    ) : (
+                      <span className="text-gray-600 italic">sem e-mail</span>
+                    )}
+                  </td>
+                  {/* Telefone */}
+                  <td className="px-4 py-3">
+                    {row.phone ? (
+                      <div className="flex items-center gap-0.5">
+                        <a
+                          href={whatsappLink(row.phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-400 hover:text-green-300 hover:underline underline-offset-2 transition-colors font-mono text-xs"
+                          title="Abrir no WhatsApp"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5 inline mr-1 opacity-70" />
+                          {row.phone}
+                        </a>
+                        <CopyButton text={row.phone} />
+                      </div>
+                    ) : (
+                      <span className="text-gray-600">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-300">{row.product || '—'}</td>
-                  <td className="px-4 py-3 text-gray-400 font-mono text-xs">{row.userip || '—'}</td>
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDateTime(row.dttime)}</td>
                   <td className="px-4 py-3">
                     <Badge variant={statusVariant(row.status)}>{row.status || '—'}</Badge>

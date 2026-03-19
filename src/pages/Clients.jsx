@@ -10,10 +10,11 @@ import ClientProductsModal from '@/modals/ClientProductsModal';
 
 const PER_PAGE = 20;
 
-const EMPTY_FILTERS = { email: '', phone: '', product_id: '', start_date: '', end_date: '' };
+const EMPTY_FILTERS = { email: '', phone: '', product_id: '', store_id: '', start_date: '', end_date: '' };
 
 export default function Clients() {
   const [products, setProducts] = useState([]);
+  const [stores, setStores] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
@@ -29,6 +30,9 @@ export default function Clients() {
     api.get('/admin/items?per_page=100')
       .then((res) => setProducts(res.data.items || []))
       .catch(() => {});
+    api.get('/admin/stores')
+      .then((res) => setStores(res.data.stores || []))
+      .catch(() => {});
   }, []);
 
   const fetchClients = useCallback(async () => {
@@ -39,6 +43,7 @@ export default function Clients() {
       if (applied.email) params.set('email', applied.email);
       if (applied.phone) params.set('phone', applied.phone);
       if (applied.product_id) params.set('product_id', applied.product_id);
+      if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
       const res = await api.get(`/admin/clients?${params}`);
@@ -87,7 +92,7 @@ export default function Clients() {
 
       {/* Filters */}
       <form onSubmit={applyFilters} className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <Input
             placeholder="E-mail"
             value={filters.email}
@@ -106,6 +111,16 @@ export default function Clients() {
             <option value="">Todos os produtos</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>{p.title}</option>
+            ))}
+          </select>
+          <select
+            value={filters.store_id}
+            onChange={(e) => setFilters((f) => ({ ...f, store_id: e.target.value }))}
+            className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          >
+            <option value="">Todas as lojas</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
           <input
