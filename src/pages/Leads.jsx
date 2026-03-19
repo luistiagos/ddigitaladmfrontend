@@ -7,15 +7,15 @@ import { LoadingRows, EmptyRow, ErrorRow } from '@/components/ui/TableStates';
 import { formatDateTime, todayISO } from '@/utils/format';
 
 const PER_PAGE = 20;
-const EMPTY_FILTERS = {
+const getEmptyFilters = () => ({
   has_email: false, status: '',
   start_date: todayISO(), end_date: todayISO(),
-};
+});
 
 export default function Leads() {
   const [statuses, setStatuses] = useState([]);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [applied, setApplied] = useState(EMPTY_FILTERS);
+  const [filters, setFilters] = useState(getEmptyFilters);
+  const [applied, setApplied] = useState(getEmptyFilters);
   const [page, setPage] = useState(1);
   const [data, setData] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
@@ -46,7 +46,7 @@ export default function Leads() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); }
-  function clearFilters() { setFilters(EMPTY_FILTERS); setApplied(EMPTY_FILTERS); setPage(1); }
+  function clearFilters() { const empty = getEmptyFilters(); setFilters(empty); setApplied(empty); setPage(1); }
 
   return (
     <div>

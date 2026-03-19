@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, UserCheck, UserX, Eye, Loader2 } from 'lucide-react';
+import { Search, X, UserCheck, UserX, Eye } from 'lucide-react';
 import api from '@/services/api';
 import Badge from '@/components/ui/Badge';
 import Pagination from '@/components/ui/Pagination';
@@ -164,7 +164,7 @@ export default function Clients() {
                     <td className="px-4 py-3 text-gray-300">{client.phone || '—'}</td>
                     <td className="px-4 py-3 text-gray-400">{formatDate(client.created_at)}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={client.active ? 'success' : 'default'}>
+                      <Badge variant={client.active ? 'green' : 'gray'}>
                         {client.active ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </td>
