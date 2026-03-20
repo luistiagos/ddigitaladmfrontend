@@ -75,10 +75,10 @@ export default function ClientProductsModal({ client, onClose }) {
               </thead>
               <tbody>
                 {items.map((item) => {
-                  const emailKey = `${item.product_id}_email`;
-                  const whatsKey = `${item.product_id}_whats`;
+                  const emailKey = `${item.user_package_id}_email`;
+                  const whatsKey = `${item.user_package_id}_whats`;
                   return (
-                    <tr key={item.product_id} className="border-b border-gray-800/60 hover:bg-gray-700/20">
+                    <tr key={item.user_package_id} className="border-b border-gray-800/60 hover:bg-gray-700/20">
                       <td className="px-4 py-3 font-medium text-white">{item.title}</td>
                       <td className="px-4 py-3 text-gray-300">{formatDate(item.purchase_date)}</td>
                       <td className="px-4 py-3 text-gray-300">{formatCurrency(item.price)}</td>
