@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, Mail, MessageCircle, Loader2 } from 'lucide-react';
+import { Search, X, Mail, MessageCircle, Loader2, CreditCard } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import Pagination from '@/components/ui/Pagination';
@@ -8,8 +8,30 @@ import { EmailCell } from '@/components/ui/ContactCell';
 import { formatDateTime, formatCurrency, todayISO } from '@/utils/format';
 
 const PER_PAGE = 20;
+
+const ALL_STATUSES = [
+  'approved', 'pending', 'create', 'in_process',
+  'payment_failed', 'reverted', 'refunded',
+  'charged_back', 'in_mediation', 'cancelled',
+];
+
+const PROVIDERS = [{ value: 'mercadopago', label: 'Mercado Pago' }];
+
+const PROVIDER_META = {
+  mercadopago: {
+    label: 'Mercado Pago',
+    cls: 'text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 ring-1 ring-cyan-500/30',
+  },
+};
+
+function getProvider(row) {
+  if (row.mpid) return 'mercadopago';
+  return null;
+}
+
 const getEmptyFilters = () => ({
   email: '', phone: '', product_id: '', store_id: '',
+  status: '', provider: '',
   start_date: todayISO(), end_date: todayISO(),
 });
 
@@ -24,6 +46,7 @@ export default function Sales() {
   const [error, setError] = useState('');
   const [sending, setSending] = useState({});
   const [feedback, setFeedback] = useState({});
+  const [detailRow, setDetailRow] = useState(null);
 
   useEffect(() => {
     api.get('/admin/items?per_page=100').then((r) => setProducts(r.data.items || [])).catch(() => {});
@@ -39,6 +62,8 @@ export default function Sales() {
       if (applied.phone) params.set('phone', applied.phone);
       if (applied.product_id) params.set('product_id', applied.product_id);
       if (applied.store_id) params.set('store_id', applied.store_id);
+      if (applied.status) params.set('status', applied.status);
+      if (applied.provider) params.set('provider', applied.provider);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
       const res = await api.get(`/admin/transactions?${params}`);
@@ -80,7 +105,7 @@ export default function Sales() {
 
       {/* Filters */}
       <form onSubmit={applyFilters} className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <TxtInput placeholder="E-mail" value={filters.email} onChange={(v) => setFilters((f) => ({ ...f, email: v }))} />
           <TxtInput placeholder="Telefone" value={filters.phone} onChange={(v) => setFilters((f) => ({ ...f, phone: v }))} />
           <select
@@ -98,6 +123,22 @@ export default function Sales() {
           >
             <option value="">Todas as lojas</option>
             {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+            className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          >
+            <option value="">Todos os status</option>
+            {ALL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select
+            value={filters.provider}
+            onChange={(e) => setFilters((f) => ({ ...f, provider: e.target.value }))}
+            className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          >
+            <option value="">Todos os providers</option>
+            {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
           <input type="date" value={filters.start_date} onChange={(e) => setFilters((f) => ({ ...f, start_date: e.target.value }))}
             className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500" />
@@ -120,38 +161,53 @@ export default function Sales() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700">
-                {['E-mail', 'Produto', 'Preço', 'Data', 'Status', 'Ações'].map((h) => (
+                {['E-mail', 'Produto', 'Preço', 'Data', 'Status', 'Origem', 'Ações'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {loading && <LoadingRows cols={6} />}
-              {!loading && error && <ErrorRow cols={6} message={error} />}
-              {!loading && !error && data.items.length === 0 && <EmptyRow cols={6} message="Nenhuma venda encontrada." />}
-              {!loading && !error && data.items.map((row) => (
-                <tr key={row.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                  <EmailCell email={row.email} />
-                  <td className="px-4 py-3 text-gray-300">{row.title || '—'}</td>
-                  <td className="px-4 py-3 text-gray-300">{formatCurrency(row.value)}</td>
-                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDateTime(row.datetime)}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusVariant(row.status)}>{row.status || '—'}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <ActionBtn icon={<Mail className="h-3.5 w-3.5" />} label="Email"
-                        loading={sending[`${row.id}_email`]} feedback={feedback[`${row.id}_email`]}
-                        onClick={() => resend(row, 'email')} />
-                      {row.phone && (
-                        <ActionBtn icon={<MessageCircle className="h-3.5 w-3.5" />} label="WhatsApp"
-                          loading={sending[`${row.id}_whats`]} feedback={feedback[`${row.id}_whats`]}
-                          onClick={() => resend(row, 'whats')} />
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {loading && <LoadingRows cols={7} />}
+              {!loading && error && <ErrorRow cols={7} message={error} />}
+              {!loading && !error && data.items.length === 0 && <EmptyRow cols={7} message="Nenhuma venda encontrada." />}
+              {!loading && !error && data.items.map((row) => {
+                const provider = getProvider(row);
+                const pMeta = PROVIDER_META[provider];
+                return (
+                  <tr key={row.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
+                    <EmailCell email={row.email} />
+                    <td className="px-4 py-3 text-gray-300">{row.title || '—'}</td>
+                    <td className="px-4 py-3 text-gray-300">{formatCurrency(row.value)}</td>
+                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDateTime(row.datetime)}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant={statusVariant(row.status)}>{row.status || '—'}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      {pMeta ? (
+                        <button
+                          onClick={() => setDetailRow(row)}
+                          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${pMeta.cls}`}
+                        >
+                          <CreditCard className="h-3 w-3" />
+                          {pMeta.label}
+                        </button>
+                      ) : <span className="text-gray-600 text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <ActionBtn icon={<Mail className="h-3.5 w-3.5" />} label="Email"
+                          loading={sending[`${row.id}_email`]} feedback={feedback[`${row.id}_email`]}
+                          onClick={() => resend(row, 'email')} />
+                        {row.phone && (
+                          <ActionBtn icon={<MessageCircle className="h-3.5 w-3.5" />} label="WhatsApp"
+                            loading={sending[`${row.id}_whats`]} feedback={feedback[`${row.id}_whats`]}
+                            onClick={() => resend(row, 'whats')} />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -160,6 +216,65 @@ export default function Sales() {
             <Pagination page={page} total={data.total} perPage={PER_PAGE} onChange={setPage} />
           </div>
         )}
+      </div>
+
+      {detailRow && (
+        <MpDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
+      )}
+    </div>
+  );
+}
+
+function MpDetailModal({ row, onClose }) {
+  const fields = [
+    { label: 'ID Transação', value: row.id },
+    { label: 'MP Payment ID', value: row.mpid },
+    { label: 'Payment ID Interno', value: row.payment_id },
+    { label: 'Preference ID', value: row.preference_id },
+    { label: 'Status', value: row.status },
+    { label: 'Valor', value: formatCurrency(row.value) },
+    { label: 'Data / Hora', value: formatDateTime(row.datetime) },
+    { label: 'E-mail', value: row.email },
+    { label: 'Telefone', value: row.phone },
+    { label: 'Produto', value: row.title },
+    { label: 'Loja', value: row.store_name },
+    { label: 'Cidade / Estado', value: [row.cidade, row.uf_nome || row.uf].filter(Boolean).join(' — ') || null },
+    { label: 'CEP', value: row.zipcode },
+    { label: 'Campanha', value: row.campaign },
+  ].filter((f) => f.value != null && f.value !== '');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="w-full max-w-lg bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-cyan-400" />
+            <span className="text-sm font-semibold text-cyan-300">Mercado Pago — Detalhes da Transação</span>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-6 py-5">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+            {fields.map(({ label, value }) => (
+              <div key={label} className="flex flex-col gap-0.5">
+                <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</dt>
+                <dd className="text-sm text-gray-100 break-all">{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-700 flex-shrink-0 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors">
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   );
