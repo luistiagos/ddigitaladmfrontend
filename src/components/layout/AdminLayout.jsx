@@ -13,6 +13,7 @@ import {
   Gamepad2,
   Settings2,
   Tag,
+  Receipt,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SendProductModal from '@/modals/SendProductModal';
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/clientes', label: 'Clientes', icon: Users },
   { to: '/vendas', label: 'Vendas', icon: ShoppingCart },
+  { to: '/transacoes', label: 'Transações', icon: Receipt },
   { to: '/disputas', label: 'Disputas', icon: AlertOctagon },
   { to: '/leads', label: 'Leads', icon: Target },
   { to: '/configuracoes', label: 'Configurações', icon: Settings2 },

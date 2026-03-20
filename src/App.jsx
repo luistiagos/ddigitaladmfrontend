@@ -11,6 +11,7 @@ import Disputes from '@/pages/Disputes';
 import Leads from '@/pages/Leads';
 import Settings from '@/pages/Settings';
 import Coupons from '@/pages/Coupons';
+import Transactions from '@/pages/Transactions';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="leads" element={<Leads />} />
             <Route path="configuracoes" element={<Settings />} />
             <Route path="cupons" element={<Coupons />} />
+            <Route path="transacoes" element={<Transactions />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
