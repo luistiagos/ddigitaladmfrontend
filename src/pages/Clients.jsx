@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, UserCheck, UserX, Eye } from 'lucide-react';
+import { Search, X, UserCheck, UserX, Eye, Download, FileText } from 'lucide-react';
 import api from '@/services/api';
 import Badge from '@/components/ui/Badge';
 import Pagination from '@/components/ui/Pagination';
@@ -24,6 +24,8 @@ export default function Clients() {
   const [selectedClient, setSelectedClient] = useState(null); // for ClientProductsModal
   const [toToggle, setToToggle] = useState(null); // { id, email, active } for ConfirmModal
   const [toggling, setToggling] = useState(false);
+  const [sortColumn, setSortColumn] = useState('created_at');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   // load products for filter dropdown
   useEffect(() => {
@@ -46,6 +48,8 @@ export default function Clients() {
       if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
+      params.set('sort_column', sortColumn);
+      params.set('sort_direction', sortDirection);
       const res = await api.get(`/admin/clients?${params}`);
       setData({ items: res.data.items || [], total: res.data.total || 0 });
     } catch {
@@ -53,7 +57,7 @@ export default function Clients() {
     } finally {
       setLoading(false);
     }
-  }, [page, applied]);
+  }, [page, applied, sortColumn, sortDirection]);
 
   useEffect(() => { fetchClients(); }, [fetchClients]);
 
@@ -67,6 +71,36 @@ export default function Clients() {
     setFilters(EMPTY_FILTERS);
     setApplied(EMPTY_FILTERS);
     setPage(1);
+  }
+
+  function handleSort(column) {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setPage(1);
+  }
+
+  function exportCSV() {
+    const headers = ['E-mail', 'WhatsApp', 'Status', 'Data de Cadastro'];
+    const rows = data.items.map(client => [
+      client.email,
+      client.phone || '',
+      client.active ? 'Ativo' : 'Inativo',
+      client.created_at || ''
+    ]);
+    const csvContent = [headers, ...rows].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'clientes.csv';
+    link.click();
+  }
+
+  function exportPDF() {
+    window.print();
   }
 
   async function confirmToggle() {
@@ -86,8 +120,26 @@ export default function Clients() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white">Clientes</h1>
-        <p className="text-sm text-gray-400 mt-1">Busca e gerenciamento de clientes cadastrados</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-white">Clientes</h1>
+            <p className="text-sm text-gray-400 mt-1">Busca e gerenciamento de clientes cadastrados</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportCSV}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors"
+            >
+              <Download className="h-4 w-4" /> CSV
+            </button>
+            <button
+              onClick={exportPDF}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors"
+            >
+              <FileText className="h-4 w-4" /> PDF
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -159,8 +211,8 @@ export default function Clients() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700">
-                <Th>E-mail</Th>
-                <Th>WhatsApp</Th>
+                <SortableTh column="email" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>E-mail</SortableTh>
+                <SortableTh column="phone" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>WhatsApp</SortableTh>
                 <Th>Status</Th>
                 <Th>Ações</Th>
               </tr>
@@ -209,6 +261,13 @@ export default function Clients() {
                   </tr>
                 ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-gray-700 bg-gray-800/50">
+                <td colSpan="4" className="px-4 py-3 text-sm text-gray-300">
+                  Total: {data.total} cliente{data.total !== 1 ? 's' : ''}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         {data.total > PER_PAGE && (
@@ -254,6 +313,25 @@ export default function Clients() {
 
 function Th({ children }) {
   return <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{children}</th>;
+}
+
+function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
+  const isActive = sortColumn === column;
+  return (
+    <th
+      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
+      onClick={() => onSort(column)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {isActive && (
+          <span className="text-gray-500">
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+    </th>
+  );
 }
 
 function Input({ placeholder, value, onChange }) {

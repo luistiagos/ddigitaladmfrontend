@@ -26,6 +26,8 @@ export default function Leads() {
   const [data, setData] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sortColumn, setSortColumn] = useState('dttime');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   useEffect(() => {
     api.get('/admin/leads/statuses').then((r) => setStatuses(r.data.statuses || [])).catch(() => {});
@@ -43,6 +45,8 @@ export default function Leads() {
       if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
+      params.set('sort_column', sortColumn);
+      params.set('sort_direction', sortDirection);
       const res = await api.get(`/admin/leads?${params}`);
       setData({ items: res.data.items || [], total: res.data.total || 0 });
     } catch {
@@ -50,12 +54,43 @@ export default function Leads() {
     } finally {
       setLoading(false);
     }
-  }, [page, applied]);
+  }, [page, applied, sortColumn, sortDirection]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); }
   function clearFilters() { const empty = getEmptyFilters(); setFilters(empty); setApplied(empty); setPage(1); }
+
+  function handleSort(column) {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setPage(1);
+  }
+
+  function exportCSV() {
+    const headers = ['E-mail', 'Telefone', 'Produto', 'Data', 'Status'];
+    const rows = data.items.map(row => [
+      row.email,
+      row.phone,
+      row.product || '',
+      formatDateTime(row.dttime),
+      row.status
+    ]);
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `leads_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  }
+
+  function exportPDF() {
+    window.print();
+  }
 
   return (
     <div>
@@ -121,9 +156,11 @@ export default function Leads() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700">
-                {['E-mail', 'Telefone', 'Produto', 'Data', 'Status'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-                ))}
+                <SortableTh column="email" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>E-mail</SortableTh>
+                <SortableTh column="phone" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Telefone</SortableTh>
+                <SortableTh column="product" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Produto</SortableTh>
+                <SortableTh column="dttime" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Data</SortableTh>
+                <SortableTh column="status" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Status</SortableTh>
               </tr>
             </thead>
             <tbody>
@@ -144,14 +181,48 @@ export default function Leads() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-gray-700 bg-gray-800/50">
+                <td colSpan="5" className="px-4 py-3 text-sm text-gray-300">
+                  Total: {data.total} lead{data.total !== 1 ? 's' : ''}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         {data.total > PER_PAGE && (
-          <div className="px-4 py-3 border-t border-gray-700">
+          <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between">
+            <div className="flex gap-2">
+              <button onClick={exportCSV} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors">
+                CSV
+              </button>
+              <button onClick={exportPDF} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition-colors">
+                PDF
+              </button>
+            </div>
             <Pagination page={page} total={data.total} perPage={PER_PAGE} onChange={setPage} />
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
+  const isActive = sortColumn === column;
+  return (
+    <th
+      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
+      onClick={() => onSort(column)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {isActive && (
+          <span className="text-gray-500">
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+    </th>
   );
 }

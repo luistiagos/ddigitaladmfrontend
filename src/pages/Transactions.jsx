@@ -30,6 +30,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [sortColumn, setSortColumn] = useState('datetime');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   useEffect(() => {
     api.get('/admin/items?per_page=100').then((r) => setProducts(r.data.items || [])).catch(() => {});
@@ -48,6 +50,8 @@ export default function Transactions() {
       if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
+      params.set('sort_column', sortColumn);
+      params.set('sort_direction', sortDirection);
       const res = await api.get(`/admin/transactions_all?${params}`);
       setData({ items: res.data.items || [], total: res.data.total || 0 });
     } catch {
@@ -55,12 +59,22 @@ export default function Transactions() {
     } finally {
       setLoading(false);
     }
-  }, [page, applied]);
+  }, [page, applied, sortColumn, sortDirection]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); }
   function clearFilters() { setFilters(EMPTY_FILTERS); setApplied(EMPTY_FILTERS); setPage(1); }
+
+  function handleSort(column) {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setPage(1);
+  }
 
   async function exportCSV() {
     setExporting(true);
@@ -269,11 +283,14 @@ export default function Transactions() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700">
-                {['#', 'E-mail', 'Telefone', 'Produto', 'Valor', 'Data/Hora', 'Status', 'Loja'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    {h}
-                  </th>
-                ))}
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">#</th>
+                <SortableTh column="email" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>E-mail</SortableTh>
+                <SortableTh column="phone" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Telefone</SortableTh>
+                <SortableTh column="title" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Produto</SortableTh>
+                <SortableTh column="value" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Valor</SortableTh>
+                <SortableTh column="datetime" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Data/Hora</SortableTh>
+                <SortableTh column="status" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Status</SortableTh>
+                <SortableTh column="store_name" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Loja</SortableTh>
               </tr>
             </thead>
             <tbody>
@@ -299,6 +316,17 @@ export default function Transactions() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-gray-700 bg-gray-800/50">
+                <td colSpan="4" className="px-4 py-3 text-sm text-gray-300">
+                  Total: {data.total} transação{data.total !== 1 ? 'ões' : ''}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-300 font-semibold">
+                  {formatCurrency(data.total_value || 0)}
+                </td>
+                <td colSpan="3"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         {data.total > PER_PAGE && (
@@ -323,5 +351,24 @@ function TxtInput({ placeholder, value, onChange }) {
       onChange={(e) => onChange(e.target.value)}
       className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500 placeholder-gray-500"
     />
+  );
+}
+
+function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
+  const isActive = sortColumn === column;
+  return (
+    <th
+      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
+      onClick={() => onSort(column)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {isActive && (
+          <span className="text-gray-500">
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+    </th>
   );
 }

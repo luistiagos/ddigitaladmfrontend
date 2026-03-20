@@ -47,6 +47,8 @@ export default function Sales() {
   const [sending, setSending] = useState({});
   const [feedback, setFeedback] = useState({});
   const [detailRow, setDetailRow] = useState(null);
+  const [sortColumn, setSortColumn] = useState('datetime');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   useEffect(() => {
     api.get('/admin/items?per_page=100').then((r) => setProducts(r.data.items || [])).catch(() => {});
@@ -66,6 +68,8 @@ export default function Sales() {
       if (applied.provider) params.set('provider', applied.provider);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
+      params.set('sort_column', sortColumn);
+      params.set('sort_direction', sortDirection);
       const res = await api.get(`/admin/transactions?${params}`);
       setData({ items: res.data.items || [], total: res.data.total || 0 });
     } catch {
@@ -73,12 +77,44 @@ export default function Sales() {
     } finally {
       setLoading(false);
     }
-  }, [page, applied]);
+  }, [page, applied, sortColumn, sortDirection]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); }
   function clearFilters() { const empty = getEmptyFilters(); setFilters(empty); setApplied(empty); setPage(1); }
+
+  function handleSort(column) {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setPage(1);
+  }
+
+  function exportCSV() {
+    const headers = ['E-mail', 'Produto', 'Preço', 'Data', 'Status', 'Origem'];
+    const rows = data.items.map(row => [
+      row.email,
+      row.title || '',
+      row.value,
+      formatDateTime(row.datetime),
+      row.status,
+      getProvider(row) ? 'Mercado Pago' : ''
+    ]);
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `vendas_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  }
+
+  function exportPDF() {
+    window.print();
+  }
 
   async function resend(row, via) {
     const key = `${row.id}_${via}`;
@@ -161,9 +197,13 @@ export default function Sales() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700">
-                {['E-mail', 'Produto', 'Preço', 'Data', 'Status', 'Origem', 'Ações'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-                ))}
+                <SortableTh column="email" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>E-mail</SortableTh>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Produto</th>
+                <SortableTh column="value" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Preço</SortableTh>
+                <SortableTh column="datetime" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Data</SortableTh>
+                <SortableTh column="status" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Status</SortableTh>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Origem</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -209,10 +249,29 @@ export default function Sales() {
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-gray-700 bg-gray-800/50">
+                <td colSpan="2" className="px-4 py-3 text-sm text-gray-300">
+                  Total: {data.total} venda{data.total !== 1 ? 's' : ''}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-300 font-semibold">
+                  {formatCurrency(data.total_value || 0)}
+                </td>
+                <td colSpan="4"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         {data.total > PER_PAGE && (
-          <div className="px-4 py-3 border-t border-gray-700">
+          <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between">
+            <div className="flex gap-2">
+              <button onClick={exportCSV} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors">
+                CSV
+              </button>
+              <button onClick={exportPDF} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition-colors">
+                PDF
+              </button>
+            </div>
             <Pagination page={page} total={data.total} perPage={PER_PAGE} onChange={setPage} />
           </div>
         )}
@@ -296,5 +355,24 @@ function ActionBtn({ icon, label, loading, feedback, onClick }) {
     <button onClick={onClick} disabled={loading} className={cls + (loading ? ' opacity-60 cursor-not-allowed' : '')}>
       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}{label}
     </button>
+  );
+}
+
+function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
+  const isActive = sortColumn === column;
+  return (
+    <th
+      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
+      onClick={() => onSort(column)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {isActive && (
+          <span className="text-gray-500">
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+    </th>
   );
 }

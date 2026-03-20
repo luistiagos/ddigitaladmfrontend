@@ -11,6 +11,8 @@ export default function Coupons() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sortColumn, setSortColumn] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -109,6 +111,35 @@ export default function Coupons() {
     }
   }
 
+  function handleSort(column) {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  }
+
+  function exportCSV() {
+    const headers = ['Código', 'Desconto', 'Produto', 'Validade'];
+    const rows = cupons.map(cupon => [
+      cupon.name,
+      `${Math.round((cupon.discount || 0) * 100)}%`,
+      cupon.product_title || 'Todos os produtos',
+      cupon.valid_date ? new Date(cupon.valid_date + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem validade'
+    ]);
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `cupons_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  }
+
+  function exportPDF() {
+    window.print();
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -130,9 +161,11 @@ export default function Coupons() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700">
-                {['Código', 'Desconto', 'Produto', 'Validade', 'Ações'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-                ))}
+                <SortableTh column="name" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Código</SortableTh>
+                <SortableTh column="discount" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Desconto</SortableTh>
+                <SortableTh column="product_title" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Produto</SortableTh>
+                <SortableTh column="valid_date" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Validade</SortableTh>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -190,8 +223,25 @@ export default function Coupons() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-gray-700 bg-gray-800/50">
+                <td colSpan="5" className="px-4 py-3 text-sm text-gray-300">
+                  Total: {cupons.length} cupom{cupons.length !== 1 ? 's' : ''}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
+        {!loading && !error && cupons.length > 0 && (
+          <div className="px-4 py-3 border-t border-gray-700 flex justify-start gap-2">
+            <button onClick={exportCSV} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors">
+              CSV
+            </button>
+            <button onClick={exportPDF} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition-colors">
+              PDF
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Create / Edit Modal */}
@@ -300,5 +350,24 @@ export default function Coupons() {
         />
       )}
     </div>
+  );
+}
+
+function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
+  const isActive = sortColumn === column;
+  return (
+    <th
+      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
+      onClick={() => onSort(column)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {isActive && (
+          <span className="text-gray-500">
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+    </th>
   );
 }
