@@ -19,7 +19,7 @@ export default function Badge({ variant = 'gray', children }) {
 export function statusVariant(status) {
   const s = (status || '').toLowerCase();
   if (['approved', 'ativo', 'purchase', 'success', '1'].includes(s)) return 'green';
-  if (['charged_back', 'in_mediation', 'inativo', '0', 'cancelled'].includes(s)) return 'red';
+  if (['charged_back', 'in_mediation', 'inativo', '0', 'cancelled', 'payment_failed'].includes(s)) return 'red';
   if (['pending', 'create', 'in_process'].includes(s)) return 'yellow';
   if (['refunded', 'reverted'].includes(s)) return 'orange';
   return 'gray';
