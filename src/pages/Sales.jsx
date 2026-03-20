@@ -4,6 +4,7 @@ import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import Pagination from '@/components/ui/Pagination';
 import { LoadingRows, EmptyRow, ErrorRow } from '@/components/ui/TableStates';
+import { EmailCell } from '@/components/ui/ContactCell';
 import { formatDateTime, formatCurrency, todayISO } from '@/utils/format';
 
 const PER_PAGE = 20;
@@ -130,7 +131,7 @@ export default function Sales() {
               {!loading && !error && data.items.length === 0 && <EmptyRow cols={6} message="Nenhuma venda encontrada." />}
               {!loading && !error && data.items.map((row) => (
                 <tr key={row.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                  <td className="px-4 py-3 text-white">{row.email}</td>
+                  <EmailCell email={row.email} />
                   <td className="px-4 py-3 text-gray-300">{row.title || '—'}</td>
                   <td className="px-4 py-3 text-gray-300">{formatCurrency(row.value)}</td>
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDateTime(row.datetime)}</td>

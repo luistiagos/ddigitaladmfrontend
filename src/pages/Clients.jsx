@@ -5,7 +5,7 @@ import Badge from '@/components/ui/Badge';
 import Pagination from '@/components/ui/Pagination';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { LoadingRows, EmptyRow, ErrorRow } from '@/components/ui/TableStates';
-import { formatDate } from '@/utils/format';
+import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import ClientProductsModal from '@/modals/ClientProductsModal';
 
 const PER_PAGE = 20;
@@ -161,23 +161,21 @@ export default function Clients() {
               <tr className="border-b border-gray-700">
                 <Th>E-mail</Th>
                 <Th>WhatsApp</Th>
-                <Th>Cadastro</Th>
                 <Th>Status</Th>
                 <Th>Ações</Th>
               </tr>
             </thead>
             <tbody>
-              {loading && <LoadingRows cols={5} />}
-              {!loading && error && <ErrorRow cols={5} message={error} />}
+              {loading && <LoadingRows cols={4} />}
+              {!loading && error && <ErrorRow cols={4} message={error} />}
               {!loading && !error && data.items.length === 0 && (
-                <EmptyRow cols={5} message="Nenhum cliente encontrado." />
+                <EmptyRow cols={4} message="Nenhum cliente encontrado." />
               )}
               {!loading && !error &&
                 data.items.map((client) => (
                   <tr key={client.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                    <td className="px-4 py-3 text-white font-medium">{client.email}</td>
-                    <td className="px-4 py-3 text-gray-300">{client.phone || '—'}</td>
-                    <td className="px-4 py-3 text-gray-400">{formatDate(client.created_at)}</td>
+                    <EmailCell email={client.email} />
+                    <PhoneCell phone={client.phone} />
                     <td className="px-4 py-3">
                       <Badge variant={client.active ? 'green' : 'gray'}>
                         {client.active ? 'Ativo' : 'Inativo'}

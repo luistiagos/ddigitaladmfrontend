@@ -4,6 +4,7 @@ import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import Pagination from '@/components/ui/Pagination';
 import { LoadingRows, EmptyRow, ErrorRow } from '@/components/ui/TableStates';
+import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import { formatDateTime, formatCurrency, todayISO } from '@/utils/format';
 
 const PER_PAGE = 20;
@@ -70,8 +71,6 @@ export default function Disputes() {
     }
   }
 
-  const subject = encodeURIComponent('Solicitação de Disputa / Reembolso');
-
   return (
     <div>
       <div className="mb-6">
@@ -132,18 +131,8 @@ export default function Disputes() {
               {!loading && !error && data.items.length === 0 && <EmptyRow cols={7} message="Nenhuma disputa encontrada." />}
               {!loading && !error && data.items.map((row) => (
                 <tr key={row.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                  <td className="px-4 py-3">
-                    <a href={`mailto:${row.email}?subject=${subject}`}
-                      className="text-violet-400 hover:text-violet-300 hover:underline">
-                      {row.email}
-                    </a>
-                  </td>
-                  <td className="px-4 py-3 text-gray-300">
-                    {row.phone
-                      ? <a href={`https://wa.me/${row.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
-                          className="text-green-400 hover:text-green-300 hover:underline">{row.phone}</a>
-                      : '—'}
-                  </td>
+                  <EmailCell email={row.email} />
+                  <PhoneCell phone={row.phone} />
                   <td className="px-4 py-3 text-gray-300">{row.title || '—'}</td>
                   <td className="px-4 py-3 text-gray-300">{formatCurrency(row.value)}</td>
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDateTime(row.datetime)}</td>

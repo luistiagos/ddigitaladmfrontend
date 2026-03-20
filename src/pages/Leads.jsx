@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, Copy, Check, MessageCircle, Mail } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import Pagination from '@/components/ui/Pagination';
 import { LoadingRows, EmptyRow, ErrorRow } from '@/components/ui/TableStates';
+import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import { formatDateTime, todayISO } from '@/utils/format';
 
 const PER_PAGE = 20;
@@ -15,33 +16,6 @@ const getEmptyFilters = () => ({
   start_date: todayISO(),
   end_date: todayISO(),
 });
-
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false);
-  function handleCopy(e) {
-    e.stopPropagation();
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
-  return (
-    <button
-      onClick={handleCopy}
-      title="Copiar"
-      className="ml-1.5 p-0.5 rounded text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
-    >
-      {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
-    </button>
-  );
-}
-
-function whatsappLink(phone) {
-  if (!phone) return null;
-  const digits = phone.replace(/\D/g, '');
-  const number = digits.startsWith('55') ? digits : `55${digits}`;
-  return `https://wa.me/${number}`;
-}
 
 export default function Leads() {
   const [statuses, setStatuses] = useState([]);
@@ -159,43 +133,9 @@ export default function Leads() {
               {!loading && !error && data.items.map((row) => (
                 <tr key={row.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
                   {/* E-mail */}
-                  <td className="px-4 py-3">
-                    {row.email ? (
-                      <div className="flex items-center gap-0.5">
-                        <a
-                          href={`mailto:${row.email}`}
-                          className="text-violet-400 hover:text-violet-300 hover:underline underline-offset-2 transition-colors"
-                          title="Enviar e-mail"
-                        >
-                          <Mail className="h-3.5 w-3.5 inline mr-1 opacity-70" />
-                          {row.email}
-                        </a>
-                        <CopyButton text={row.email} />
-                      </div>
-                    ) : (
-                      <span className="text-gray-600 italic">sem e-mail</span>
-                    )}
-                  </td>
+                  <EmailCell email={row.email} />
                   {/* Telefone */}
-                  <td className="px-4 py-3">
-                    {row.phone ? (
-                      <div className="flex items-center gap-0.5">
-                        <a
-                          href={whatsappLink(row.phone)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-green-400 hover:text-green-300 hover:underline underline-offset-2 transition-colors font-mono text-xs"
-                          title="Abrir no WhatsApp"
-                        >
-                          <MessageCircle className="h-3.5 w-3.5 inline mr-1 opacity-70" />
-                          {row.phone}
-                        </a>
-                        <CopyButton text={row.phone} />
-                      </div>
-                    ) : (
-                      <span className="text-gray-600">—</span>
-                    )}
-                  </td>
+                  <PhoneCell phone={row.phone} />
                   <td className="px-4 py-3 text-gray-300">{row.product || '—'}</td>
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDateTime(row.dttime)}</td>
                   <td className="px-4 py-3">
