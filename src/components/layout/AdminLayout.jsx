@@ -43,7 +43,7 @@ function NavItem({ to, label, icon: Icon, end, onClick }) {
         }`
       }
     >
-      <Icon className="h-4 w-4 flex-shrink-0" />
+      <Icon className="h-4 w-4 shrink-0" />
       {label}
     </NavLink>
   );
@@ -108,7 +108,7 @@ export default function AdminLayout() {
   return (
     <div className="flex h-screen bg-gray-900 overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col w-56 flex-shrink-0 bg-gray-900 border-r border-gray-800">
+      <aside className="hidden lg:flex flex-col w-56 shrink-0 bg-gray-900 border-r border-gray-800">
         {SidebarContent}
       </aside>
 
@@ -138,7 +138,7 @@ export default function AdminLayout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top header */}
-        <header className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-900 flex-shrink-0">
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-900 shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white"

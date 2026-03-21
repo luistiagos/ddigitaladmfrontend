@@ -19,7 +19,7 @@ export default function ClientProductsModal({ client, onClose }) {
   }, [client.id]);
 
   async function resend(product, via) {
-    const key = `${product.product_id}_${via}`;
+    const key = `${product.user_package_id}_${via}`;
     setSending((s) => ({ ...s, [key]: true }));
     const payload = { email: client.email, product_id: product.product_id };
     if (via === 'whats') {
@@ -41,7 +41,7 @@ export default function ClientProductsModal({ client, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
       <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
           <div>
             <h2 className="font-semibold text-white">Produtos do cliente</h2>
             <p className="text-xs text-gray-400 mt-0.5">{client.email}</p>
@@ -115,7 +115,7 @@ export default function ClientProductsModal({ client, onClose }) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-700 flex-shrink-0">
+        <div className="px-6 py-4 border-t border-gray-700 shrink-0">
           <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors">
             Fechar
           </button>

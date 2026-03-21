@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, UserCheck, UserX, Eye, Download, FileText } from 'lucide-react';
+import { Search, X, UserCheck, UserX, Eye } from 'lucide-react';
 import api from '@/services/api';
 import Badge from '@/components/ui/Badge';
-import Pagination from '@/components/ui/Pagination';
 import ConfirmModal from '@/components/ui/ConfirmModal';
-import { LoadingRows, EmptyRow, ErrorRow } from '@/components/ui/TableStates';
+import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import ClientProductsModal from '@/modals/ClientProductsModal';
+import useAdminGrid from '@/utils/useAdminGrid';
 
 const PER_PAGE = 20;
 
@@ -17,15 +17,14 @@ export default function Clients() {
   const [stores, setStores] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
-  const [page, setPage] = useState(1);
   const [data, setData] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedClient, setSelectedClient] = useState(null); // for ClientProductsModal
-  const [toToggle, setToToggle] = useState(null); // { id, email, active } for ConfirmModal
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [toToggle, setToToggle] = useState(null);
   const [toggling, setToggling] = useState(false);
-  const [sortColumn, setSortColumn] = useState('created_at');
-  const [sortDirection, setSortDirection] = useState('desc');
+  const { page, setPage, sortColumn, sortDirection, handleSort } =
+    useAdminGrid({ defaultSort: 'created_at', defaultDir: 'desc' });
 
   // load products for filter dropdown
   useEffect(() => {
@@ -73,36 +72,6 @@ export default function Clients() {
     setPage(1);
   }
 
-  function handleSort(column) {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-    setPage(1);
-  }
-
-  function exportCSV() {
-    const headers = ['E-mail', 'WhatsApp', 'Status', 'Data de Cadastro'];
-    const rows = data.items.map(client => [
-      client.email,
-      client.phone || '',
-      client.active ? 'Ativo' : 'Inativo',
-      client.created_at || ''
-    ]);
-    const csvContent = [headers, ...rows].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'clientes.csv';
-    link.click();
-  }
-
-  function exportPDF() {
-    window.print();
-  }
-
   async function confirmToggle() {
     if (!toToggle) return;
     setToggling(true);
@@ -117,29 +86,57 @@ export default function Clients() {
     }
   }
 
+  const columns = [
+    {
+      key: 'email', label: 'E-mail', sortable: true, fullCell: true,
+      render: r => <EmailCell email={r.email} />,
+      csvValue: r => r.email ?? '',
+    },
+    {
+      key: 'phone', label: 'WhatsApp', sortable: true, fullCell: true,
+      render: r => <PhoneCell phone={r.phone} />,
+      csvValue: r => r.phone ?? '',
+    },
+    {
+      key: 'status', label: 'Status',
+      render: r => <Badge variant={r.active ? 'green' : 'gray'}>{r.active ? 'Ativo' : 'Inativo'}</Badge>,
+      csvValue: r => r.active ? 'Ativo' : 'Inativo',
+    },
+    {
+      key: 'actions', label: 'Ações',
+      render: r => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSelectedClient(r)}
+            title="Ver produtos"
+            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+          >
+            <Eye className="h-3.5 w-3.5" /> Ver
+          </button>
+          <button
+            onClick={() => setToToggle(r)}
+            title={r.active ? 'Desativar' : 'Ativar'}
+            className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${
+              r.active
+                ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                : 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
+            }`}
+          >
+            {r.active
+              ? <><UserX className="h-3.5 w-3.5" /> Desativar</>
+              : <><UserCheck className="h-3.5 w-3.5" /> Ativar</>}
+          </button>
+        </div>
+      ),
+      csvValue: () => '',
+    },
+  ];
+
   return (
     <div>
       <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-white">Clientes</h1>
-            <p className="text-sm text-gray-400 mt-1">Busca e gerenciamento de clientes cadastrados</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={exportCSV}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors"
-            >
-              <Download className="h-4 w-4" /> CSV
-            </button>
-            <button
-              onClick={exportPDF}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors"
-            >
-              <FileText className="h-4 w-4" /> PDF
-            </button>
-          </div>
-        </div>
+        <h1 className="text-xl font-semibold text-white">Clientes</h1>
+        <p className="text-sm text-gray-400 mt-1">Busca e gerenciamento de clientes cadastrados</p>
       </div>
 
       {/* Filters */}
@@ -205,77 +202,21 @@ export default function Clients() {
         </div>
       </form>
 
-      {/* Table */}
-      <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <SortableTh column="email" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>E-mail</SortableTh>
-                <SortableTh column="phone" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>WhatsApp</SortableTh>
-                <Th>Status</Th>
-                <Th>Ações</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <LoadingRows cols={4} />}
-              {!loading && error && <ErrorRow cols={4} message={error} />}
-              {!loading && !error && data.items.length === 0 && (
-                <EmptyRow cols={4} message="Nenhum cliente encontrado." />
-              )}
-              {!loading && !error &&
-                data.items.map((client) => (
-                  <tr key={client.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                    <EmailCell email={client.email} />
-                    <PhoneCell phone={client.phone} />
-                    <td className="px-4 py-3">
-                      <Badge variant={client.active ? 'green' : 'gray'}>
-                        {client.active ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setSelectedClient(client)}
-                          title="Ver produtos"
-                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-                        >
-                          <Eye className="h-3.5 w-3.5" /> Ver
-                        </button>
-                        <button
-                          onClick={() => setToToggle(client)}
-                          title={client.active ? 'Desativar' : 'Ativar'}
-                          className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${
-                            client.active
-                              ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
-                              : 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
-                          }`}
-                        >
-                          {client.active
-                            ? <><UserX className="h-3.5 w-3.5" /> Desativar</>
-                            : <><UserCheck className="h-3.5 w-3.5" /> Ativar</>
-                          }
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-gray-700 bg-gray-800/50">
-                <td colSpan="4" className="px-4 py-3 text-sm text-gray-300">
-                  Total: {data.total} cliente{data.total !== 1 ? 's' : ''}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        {data.total > PER_PAGE && (
-          <div className="px-4 py-3 border-t border-gray-700">
-            <Pagination page={page} total={data.total} perPage={PER_PAGE} onChange={setPage} />
-          </div>
-        )}
-      </div>
+      <AdminGrid
+        columns={columns}
+        data={data}
+        loading={loading}
+        error={error}
+        emptyMessage="Nenhum cliente encontrado."
+        page={page}
+        perPage={PER_PAGE}
+        onPageChange={setPage}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        totalLabel="cliente"
+        title="Clientes"
+      />
 
       {/* Confirm toggle modal */}
       {toToggle && toToggle.active && (
@@ -311,37 +252,10 @@ export default function Clients() {
   );
 }
 
-function Th({ children }) {
-  return <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{children}</th>;
-}
-
-function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
-  const isActive = sortColumn === column;
-  return (
-    <th
-      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
-      onClick={() => onSort(column)}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        {isActive && (
-          <span className="text-gray-500">
-            {sortDirection === 'asc' ? '↑' : '↓'}
-          </span>
-        )}
-      </div>
-    </th>
-  );
-}
-
 function Input({ placeholder, value, onChange }) {
   return (
-    <input
-      type="text"
-      placeholder={placeholder}
-      value={value}
+    <input type="text" placeholder={placeholder} value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-    />
+      className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500 placeholder-gray-500" />
   );
 }

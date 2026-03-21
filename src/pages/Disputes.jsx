@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Search, X, Mail, MessageCircle, Loader2 } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
-import Pagination from '@/components/ui/Pagination';
-import { LoadingRows, EmptyRow, ErrorRow } from '@/components/ui/TableStates';
+import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
+import useAdminGrid from '@/utils/useAdminGrid';
 import { formatDateTime, formatCurrency, todayISO } from '@/utils/format';
 
 const PER_PAGE = 20;
@@ -18,14 +18,13 @@ export default function Disputes() {
   const [stores, setStores] = useState([]);
   const [filters, setFilters] = useState(getEmptyFilters);
   const [applied, setApplied] = useState(getEmptyFilters);
-  const [page, setPage] = useState(1);
-  const [data, setData] = useState({ items: [], total: 0 });
+  const [data, setData] = useState({ items: [], total: 0, total_value: null });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sending, setSending] = useState({});
   const [feedback, setFeedback] = useState({});
-  const [sortColumn, setSortColumn] = useState('datetime');
-  const [sortDirection, setSortDirection] = useState('desc');
+  const { page, setPage, sortColumn, sortDirection, handleSort } =
+    useAdminGrid({ defaultSort: 'datetime', defaultDir: 'desc' });
 
   useEffect(() => {
     api.get('/admin/items?per_page=100').then((r) => setProducts(r.data.items || [])).catch(() => {});
@@ -46,7 +45,7 @@ export default function Disputes() {
       params.set('sort_column', sortColumn);
       params.set('sort_direction', sortDirection);
       const res = await api.get(`/admin/disputes?${params}`);
-      setData({ items: res.data.items || [], total: res.data.total || 0 });
+      setData({ items: res.data.items || [], total: res.data.total || 0, total_value: res.data.total_value ?? null });
     } catch {
       setError('Erro ao carregar disputas.');
     } finally {
@@ -58,38 +57,6 @@ export default function Disputes() {
 
   function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); }
   function clearFilters() { const empty = getEmptyFilters(); setFilters(empty); setApplied(empty); setPage(1); }
-
-  function handleSort(column) {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-    setPage(1);
-  }
-
-  function exportCSV() {
-    const headers = ['E-mail', 'WhatsApp', 'Produto', 'Preço', 'Data', 'Status'];
-    const rows = data.items.map(row => [
-      row.email,
-      row.phone,
-      row.title || '',
-      row.value,
-      formatDateTime(row.datetime),
-      row.status
-    ]);
-    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `disputas_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  }
-
-  function exportPDF() {
-    window.print();
-  }
 
   async function resend(row, via) {
     const key = `${row.id}_${via}`;
@@ -106,6 +73,56 @@ export default function Disputes() {
       setTimeout(() => setFeedback((f) => { const n = { ...f }; delete n[key]; return n; }), 3000);
     }
   }
+
+  const columns = [
+    {
+      key: 'email', label: 'E-mail', sortable: true, fullCell: true,
+      render: r => <EmailCell email={r.email} />,
+      csvValue: r => r.email ?? '',
+    },
+    {
+      key: 'phone', label: 'WhatsApp', sortable: true, fullCell: true,
+      render: r => <PhoneCell phone={r.phone} />,
+      csvValue: r => r.phone ?? '',
+    },
+    {
+      key: 'title', label: 'Produto', sortable: true,
+      render: r => r.title || '—',
+      csvValue: r => r.title ?? '',
+    },
+    {
+      key: 'value', label: 'Preço', sortable: true, isValueColumn: true,
+      render: r => formatCurrency(r.value),
+      csvValue: r => r.value != null ? Number(r.value).toFixed(2).replace('.', ',') : '',
+    },
+    {
+      key: 'datetime', label: 'Data', sortable: true,
+      className: 'px-4 py-3 text-gray-400 whitespace-nowrap',
+      render: r => formatDateTime(r.datetime),
+      csvValue: r => r.datetime ?? '',
+    },
+    {
+      key: 'status', label: 'Status', sortable: true,
+      render: r => <Badge variant={statusVariant(r.status)}>{r.status || '—'}</Badge>,
+      csvValue: r => r.status ?? '',
+    },
+    {
+      key: 'actions', label: 'Ações',
+      render: r => (
+        <div className="flex items-center gap-2">
+          <ActionBtn icon={<Mail className="h-3.5 w-3.5" />} label="Email"
+            loading={sending[`${r.id}_email`]} feedback={feedback[`${r.id}_email`]}
+            onClick={() => resend(r, 'email')} />
+          {r.phone && (
+            <ActionBtn icon={<MessageCircle className="h-3.5 w-3.5" />} label="WhatsApp"
+              loading={sending[`${r.id}_whats`]} feedback={feedback[`${r.id}_whats`]}
+              onClick={() => resend(r, 'whats')} />
+          )}
+        </div>
+      ),
+      csvValue: () => '',
+    },
+  ];
 
   return (
     <div>
@@ -150,97 +167,22 @@ export default function Disputes() {
         </div>
       </form>
 
-      {/* Table */}
-      <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <SortableTh column="email" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>E-mail</SortableTh>
-                <SortableTh column="phone" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>WhatsApp</SortableTh>
-                <SortableTh column="title" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Produto</SortableTh>
-                <SortableTh column="value" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Preço</SortableTh>
-                <SortableTh column="datetime" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Data</SortableTh>
-                <SortableTh column="status" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Status</SortableTh>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <LoadingRows cols={7} />}
-              {!loading && error && <ErrorRow cols={7} message={error} />}
-              {!loading && !error && data.items.length === 0 && <EmptyRow cols={7} message="Nenhuma disputa encontrada." />}
-              {!loading && !error && data.items.map((row) => (
-                <tr key={row.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                  <EmailCell email={row.email} />
-                  <PhoneCell phone={row.phone} />
-                  <td className="px-4 py-3 text-gray-300">{row.title || '—'}</td>
-                  <td className="px-4 py-3 text-gray-300">{formatCurrency(row.value)}</td>
-                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDateTime(row.datetime)}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusVariant(row.status)}>{row.status || '—'}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <ActionBtn icon={<Mail className="h-3.5 w-3.5" />} label="Email"
-                        loading={sending[`${row.id}_email`]} feedback={feedback[`${row.id}_email`]}
-                        onClick={() => resend(row, 'email')} />
-                      {row.phone && (
-                        <ActionBtn icon={<MessageCircle className="h-3.5 w-3.5" />} label="WhatsApp"
-                          loading={sending[`${row.id}_whats`]} feedback={feedback[`${row.id}_whats`]}
-                          onClick={() => resend(row, 'whats')} />
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-gray-700 bg-gray-800/50">
-                <td colSpan="3" className="px-4 py-3 text-sm text-gray-300">
-                  Total: {data.total} disputa{data.total !== 1 ? 's' : ''}
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-300 font-semibold">
-                  {formatCurrency(data.total_value || 0)}
-                </td>
-                <td colSpan="3"></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        {data.total > PER_PAGE && (
-          <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between">
-            <div className="flex gap-2">
-              <button onClick={exportCSV} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors">
-                CSV
-              </button>
-              <button onClick={exportPDF} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition-colors">
-                PDF
-              </button>
-            </div>
-            <Pagination page={page} total={data.total} perPage={PER_PAGE} onChange={setPage} />
-          </div>
-        )}
-      </div>
+      <AdminGrid
+        columns={columns}
+        data={data}
+        loading={loading}
+        error={error}
+        emptyMessage="Nenhuma disputa encontrada."
+        page={page}
+        perPage={PER_PAGE}
+        onPageChange={setPage}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        totalLabel="disputa"
+        title="Disputas"
+      />
     </div>
-  );
-}
-
-function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
-  const isActive = sortColumn === column;
-  return (
-    <th
-      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
-      onClick={() => onSort(column)}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        {isActive && (
-          <span className="text-gray-500">
-            {sortDirection === 'asc' ? '↑' : '↓'}
-          </span>
-        )}
-      </div>
-    </th>
   );
 }
 
@@ -254,7 +196,7 @@ function TxtInput({ placeholder, value, onChange }) {
 
 function ActionBtn({ icon, label, loading, feedback, onClick }) {
   let cls = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors bg-gray-700 hover:bg-gray-600 text-gray-300';
-  if (feedback === 'ok') cls = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-green-500/20 text-green-400';
+  if (feedback === 'ok')  cls = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-green-500/20 text-green-400';
   if (feedback === 'err') cls = 'inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-500/20 text-red-400';
   return (
     <button onClick={onClick} disabled={loading} className={cls + (loading ? ' opacity-60 cursor-not-allowed' : '')}>

@@ -168,8 +168,8 @@ function ResultRow({ label, result, message }) {
   return (
     <div className={`flex items-start gap-3 rounded-lg p-3 ${ok ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
       {ok
-        ? <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
-        : <XCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+        ? <CheckCircle className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
+        : <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
       }
       <div>
         <div className={`text-xs font-semibold ${ok ? 'text-green-300' : 'text-red-300'}`}>{label}</div>

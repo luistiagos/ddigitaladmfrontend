@@ -23,7 +23,7 @@ function CopyButton({ text }) {
     <button
       onClick={handleCopy}
       title="Copiar"
-      className="ml-1.5 p-0.5 rounded text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
+      className="ml-1.5 p-0.5 rounded text-gray-500 hover:text-gray-300 transition-colors shrink-0"
     >
       {copied
         ? <Check className="h-3.5 w-3.5 text-green-400" />

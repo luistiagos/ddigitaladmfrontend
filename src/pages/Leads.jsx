@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
-import Pagination from '@/components/ui/Pagination';
-import { LoadingRows, EmptyRow, ErrorRow } from '@/components/ui/TableStates';
+import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
+import useAdminGrid from '@/utils/useAdminGrid';
 import { formatDateTime, todayISO } from '@/utils/format';
 
 const PER_PAGE = 20;
@@ -22,12 +22,11 @@ export default function Leads() {
   const [stores, setStores] = useState([]);
   const [filters, setFilters] = useState(getEmptyFilters);
   const [applied, setApplied] = useState(getEmptyFilters);
-  const [page, setPage] = useState(1);
   const [data, setData] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sortColumn, setSortColumn] = useState('dttime');
-  const [sortDirection, setSortDirection] = useState('desc');
+  const { page, setPage, sortColumn, sortDirection, handleSort } =
+    useAdminGrid({ defaultSort: 'dttime', defaultDir: 'desc' });
 
   useEffect(() => {
     api.get('/admin/leads/statuses').then((r) => setStatuses(r.data.statuses || [])).catch(() => {});
@@ -61,36 +60,34 @@ export default function Leads() {
   function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); }
   function clearFilters() { const empty = getEmptyFilters(); setFilters(empty); setApplied(empty); setPage(1); }
 
-  function handleSort(column) {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-    setPage(1);
-  }
-
-  function exportCSV() {
-    const headers = ['E-mail', 'Telefone', 'Produto', 'Data', 'Status'];
-    const rows = data.items.map(row => [
-      row.email,
-      row.phone,
-      row.product || '',
-      formatDateTime(row.dttime),
-      row.status
-    ]);
-    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `leads_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  }
-
-  function exportPDF() {
-    window.print();
-  }
+  const columns = [
+    {
+      key: 'email', label: 'E-mail', sortable: true, fullCell: true,
+      render: r => <EmailCell email={r.email} />,
+      csvValue: r => r.email ?? '',
+    },
+    {
+      key: 'phone', label: 'Telefone', sortable: true, fullCell: true,
+      render: r => <PhoneCell phone={r.phone} />,
+      csvValue: r => r.phone ?? '',
+    },
+    {
+      key: 'product', label: 'Produto', sortable: true,
+      render: r => r.product || '—',
+      csvValue: r => r.product ?? '',
+    },
+    {
+      key: 'dttime', label: 'Data', sortable: true,
+      className: 'px-4 py-3 text-gray-400 whitespace-nowrap',
+      render: r => formatDateTime(r.dttime),
+      csvValue: r => r.dttime ?? '',
+    },
+    {
+      key: 'status', label: 'Status', sortable: true,
+      render: r => <Badge variant={statusVariant(r.status)}>{r.status || '—'}</Badge>,
+      csvValue: r => r.status ?? '',
+    },
+  ];
 
   return (
     <div>
@@ -150,79 +147,22 @@ export default function Leads() {
         </div>
       </form>
 
-      {/* Table */}
-      <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <SortableTh column="email" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>E-mail</SortableTh>
-                <SortableTh column="phone" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Telefone</SortableTh>
-                <SortableTh column="product" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Produto</SortableTh>
-                <SortableTh column="dttime" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Data</SortableTh>
-                <SortableTh column="status" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Status</SortableTh>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <LoadingRows cols={5} />}
-              {!loading && error && <ErrorRow cols={5} message={error} />}
-              {!loading && !error && data.items.length === 0 && <EmptyRow cols={5} message="Nenhum lead encontrado." />}
-              {!loading && !error && data.items.map((row) => (
-                <tr key={row.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                  {/* E-mail */}
-                  <EmailCell email={row.email} />
-                  {/* Telefone */}
-                  <PhoneCell phone={row.phone} />
-                  <td className="px-4 py-3 text-gray-300">{row.product || '—'}</td>
-                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatDateTime(row.dttime)}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusVariant(row.status)}>{row.status || '—'}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-gray-700 bg-gray-800/50">
-                <td colSpan="5" className="px-4 py-3 text-sm text-gray-300">
-                  Total: {data.total} lead{data.total !== 1 ? 's' : ''}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        {data.total > PER_PAGE && (
-          <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between">
-            <div className="flex gap-2">
-              <button onClick={exportCSV} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors">
-                CSV
-              </button>
-              <button onClick={exportPDF} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition-colors">
-                PDF
-              </button>
-            </div>
-            <Pagination page={page} total={data.total} perPage={PER_PAGE} onChange={setPage} />
-          </div>
-        )}
-      </div>
+      <AdminGrid
+        columns={columns}
+        data={data}
+        loading={loading}
+        error={error}
+        emptyMessage="Nenhum lead encontrado."
+        page={page}
+        perPage={PER_PAGE}
+        onPageChange={setPage}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        totalLabel="lead"
+        title="Leads"
+      />
     </div>
   );
 }
 
-function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
-  const isActive = sortColumn === column;
-  return (
-    <th
-      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
-      onClick={() => onSort(column)}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        {isActive && (
-          <span className="text-gray-500">
-            {sortDirection === 'asc' ? '↑' : '↓'}
-          </span>
-        )}
-      </div>
-    </th>
-  );
-}

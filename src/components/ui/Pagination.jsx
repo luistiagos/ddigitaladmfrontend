@@ -12,11 +12,7 @@ export default function Pagination({ page, perPage, total, onChange }) {
   }
 
   return (
-    <div className="flex items-center justify-between px-2 py-3 text-sm text-gray-400">
-      <span>
-        {total} {total === 1 ? 'registro' : 'registros'} — página {page} de {totalPages}
-      </span>
-      <div className="flex items-center gap-1">
+    <div className="flex items-center justify-end gap-1 text-sm text-gray-400">
         <button
           disabled={page === 1}
           onClick={() => onChange(page - 1)}
@@ -50,7 +46,6 @@ export default function Pagination({ page, perPage, total, onChange }) {
         >
           <ChevronRight className="h-4 w-4" />
         </button>
-      </div>
     </div>
   );
 }

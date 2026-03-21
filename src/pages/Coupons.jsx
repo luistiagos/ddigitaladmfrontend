@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, Tag } from 'lucide-react';
 import api from '@/services/api';
 import Badge from '@/components/ui/Badge';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import AdminGrid from '@/components/ui/AdminGrid';
+import useAdminGrid from '@/utils/useAdminGrid';
 
 const EMPTY_FORM = { name: '', discount: '', product_id: '', valid_date: '' };
 
@@ -11,8 +13,8 @@ export default function Coupons() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [sortColumn, setSortColumn] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
+  const { sortColumn, sortDirection, handleSort } =
+    useAdminGrid({ defaultSort: 'name', defaultDir: 'asc' });
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -111,34 +113,67 @@ export default function Coupons() {
     }
   }
 
-  function handleSort(column) {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  }
+  const sortedCupons = useMemo(() => {
+    return [...cupons].sort((a, b) => {
+      const v1 = sortColumn === 'discount' ? (a.discount ?? 0) : String(a[sortColumn] == null ? '' : a[sortColumn]).toLowerCase();
+      const v2 = sortColumn === 'discount' ? (b.discount ?? 0) : String(b[sortColumn] == null ? '' : b[sortColumn]).toLowerCase();
+      if (v1 < v2) return sortDirection === 'asc' ? -1 : 1;
+      if (v1 > v2) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [cupons, sortColumn, sortDirection]);
 
-  function exportCSV() {
-    const headers = ['Código', 'Desconto', 'Produto', 'Validade'];
-    const rows = cupons.map(cupon => [
-      cupon.name,
-      `${Math.round((cupon.discount || 0) * 100)}%`,
-      cupon.product_title || 'Todos os produtos',
-      cupon.valid_date ? new Date(cupon.valid_date + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem validade'
-    ]);
-    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `cupons_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  }
-
-  function exportPDF() {
-    window.print();
-  }
+  const columns = [
+    {
+      key: 'name', label: 'Código', sortable: true,
+      render: r => (
+        <span className="inline-flex items-center gap-1.5 font-mono text-xs bg-gray-700 text-violet-300 px-2 py-1 rounded">
+          <Tag className="h-3 w-3" />{r.name}
+        </span>
+      ),
+      csvValue: r => r.name ?? '',
+    },
+    {
+      key: 'discount', label: 'Desconto', sortable: true,
+      render: r => <Badge variant="green">{Math.round((r.discount || 0) * 100)}% OFF</Badge>,
+      csvValue: r => `${Math.round((r.discount || 0) * 100)}%`,
+    },
+    {
+      key: 'product_title', label: 'Produto', sortable: true,
+      render: r => r.product_title || <span className="text-gray-500 text-xs">Todos os produtos</span>,
+      csvValue: r => r.product_title || 'Todos os produtos',
+    },
+    {
+      key: 'valid_date', label: 'Validade', sortable: true,
+      className: 'px-4 py-3 text-gray-400',
+      render: r => r.valid_date
+        ? new Date(r.valid_date + 'T00:00:00').toLocaleDateString('pt-BR')
+        : <span className="text-gray-600 text-xs">Sem validade</span>,
+      csvValue: r => r.valid_date
+        ? new Date(r.valid_date + 'T00:00:00').toLocaleDateString('pt-BR')
+        : 'Sem validade',
+    },
+    {
+      key: 'actions', label: 'Ações',
+      render: r => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openEdit(r)}
+            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+          >
+            <Pencil className="h-3.5 w-3.5" /> Editar
+          </button>
+          <button
+            onClick={() => setToDelete(r)}
+            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Excluir
+          </button>
+        </div>
+      ),
+      csvValue: () => '',
+    },
+  ];
 
   return (
     <div>
@@ -155,94 +190,18 @@ export default function Coupons() {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <SortableTh column="name" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Código</SortableTh>
-                <SortableTh column="discount" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Desconto</SortableTh>
-                <SortableTh column="product_title" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Produto</SortableTh>
-                <SortableTh column="valid_date" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort}>Validade</SortableTh>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                    <Loader2 className="h-5 w-5 animate-spin inline" />
-                  </td>
-                </tr>
-              )}
-              {!loading && error && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-red-400 text-sm">{error}</td>
-                </tr>
-              )}
-              {!loading && !error && cupons.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-sm">Nenhum cupom cadastrado.</td>
-                </tr>
-              )}
-              {!loading && !error && cupons.map((c) => (
-                <tr key={c.id} className="border-b border-gray-800/60 hover:bg-gray-700/20 transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1.5 font-mono text-xs bg-gray-700 text-violet-300 px-2 py-1 rounded">
-                      <Tag className="h-3 w-3" />{c.name}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="green">{Math.round((c.discount || 0) * 100)}% OFF</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-gray-300">
-                    {c.product_title || <span className="text-gray-500 text-xs">Todos os produtos</span>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-400">
-                    {c.valid_date
-                      ? new Date(c.valid_date + 'T00:00:00').toLocaleDateString('pt-BR')
-                      : <span className="text-gray-600 text-xs">Sem validade</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openEdit(c)}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-                      >
-                        <Pencil className="h-3.5 w-3.5" /> Editar
-                      </button>
-                      <button
-                        onClick={() => setToDelete(c)}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" /> Excluir
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-gray-700 bg-gray-800/50">
-                <td colSpan="5" className="px-4 py-3 text-sm text-gray-300">
-                  Total: {cupons.length} cupom{cupons.length !== 1 ? 's' : ''}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        {!loading && !error && cupons.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-700 flex justify-start gap-2">
-            <button onClick={exportCSV} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors">
-              CSV
-            </button>
-            <button onClick={exportPDF} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition-colors">
-              PDF
-            </button>
-          </div>
-        )}
-      </div>
+      <AdminGrid
+        columns={columns}
+        data={{ items: sortedCupons, total: sortedCupons.length }}
+        loading={loading}
+        error={error}
+        emptyMessage="Nenhum cupom cadastrado."
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        totalLabel="cupom"
+        title="Cupons"
+      />
 
       {/* Create / Edit Modal */}
       {modalOpen && (
@@ -353,21 +312,4 @@ export default function Coupons() {
   );
 }
 
-function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
-  const isActive = sortColumn === column;
-  return (
-    <th
-      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
-      onClick={() => onSort(column)}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        {isActive && (
-          <span className="text-gray-500">
-            {sortDirection === 'asc' ? '↑' : '↓'}
-          </span>
-        )}
-      </div>
-    </th>
-  );
-}
+

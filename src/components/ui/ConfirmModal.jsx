@@ -6,7 +6,7 @@ export default function ConfirmModal({ title, message, onConfirm, onCancel, conf
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
       <div className="w-full max-w-sm bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-6">
         <div className="flex items-start gap-3 mb-4">
-          <AlertTriangle className={`h-5 w-5 mt-0.5 flex-shrink-0 ${isDestructive ? 'text-red-400' : 'text-yellow-400'}`} />
+          <AlertTriangle className={`h-5 w-5 mt-0.5 shrink-0 ${isDestructive ? 'text-red-400' : 'text-yellow-400'}`} />
           <div>
             <h3 className="font-semibold text-white">{title}</h3>
             <p className="text-sm text-gray-400 mt-1">{message}</p>

@@ -43,7 +43,7 @@ function SkeletonCard() {
 
 function NotConfiguredCard({ label }) {
   return (
-    <div className="bg-gray-800/40 border border-dashed border-gray-700 rounded-xl p-5 flex flex-col items-center justify-center gap-2 text-center min-h-[120px]">
+    <div className="bg-gray-800/40 border border-dashed border-gray-700 rounded-xl p-5 flex flex-col items-center justify-center gap-2 text-center min-h-30">
       <AlertCircle className="h-5 w-5 text-gray-600" />
       <p className="text-xs text-gray-500">{label} não configurado</p>
       <Link
@@ -67,7 +67,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [fbSpend, setFbSpend] = useState(null);
-  const [loadingFb, setLoadingFb] = useState(false);
+  const [loadingFb, setLoadingFb] = useState(true);
   const [fbError, setFbError] = useState('');
 
   const metaOk = hasProvider('meta');
@@ -203,12 +203,12 @@ export default function Dashboard() {
               fbError ? (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-5 flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <Megaphone className="h-4 w-4 text-red-400 flex-shrink-0" />
+                    <Megaphone className="h-4 w-4 text-red-400 shrink-0" />
                     <span className="text-xs font-semibold text-red-400 uppercase tracking-wider">
                       Meta Ads — Erro
                     </span>
                   </div>
-                  <p className="text-xs text-red-300 break-words">{fbError}</p>
+                  <p className="text-xs text-red-300 wrap-break-word">{fbError}</p>
                   <Link to="/configuracoes" className="text-xs text-violet-400 hover:underline mt-1">
                     Revisar configurações →
                   </Link>
