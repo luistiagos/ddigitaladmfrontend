@@ -9,6 +9,7 @@ export default function SendProductModal({ onClose }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [productId, setProductId] = useState('');
+  const [mpOrderId, setMpOrderId] = useState('');
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null); // { email: {...}, whats: {...} }
   const [error, setError] = useState('');
@@ -29,8 +30,8 @@ export default function SendProductModal({ onClose }) {
     if (!productId) { setError('Selecione um produto.'); return; }
 
     setSending(true);
-    const payload = { email: email.trim(), product_id: productId };
-    const whatsPayload = { email: email.trim(), phone: phone.trim(), product_id: productId };
+    const payload = { email: email.trim(), product_id: productId, ...(mpOrderId.trim() && { mp_order_id: mpOrderId.trim() }) };
+    const whatsPayload = { email: email.trim(), phone: phone.trim(), product_id: productId, ...(mpOrderId.trim() && { mp_order_id: mpOrderId.trim() }) };
 
     const emailResult = await api.post('/admin/manualdeliver_v2', payload)
       .then((r) => ({ success: true, data: r.data }))
@@ -90,6 +91,16 @@ export default function SendProductModal({ onClose }) {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+5541999999999"
+                  className={INPUT_CLS}
+                />
+              </Field>
+
+              <Field label="ID do Pedido MP (opcional)">
+                <input
+                  type="text"
+                  value={mpOrderId}
+                  onChange={(e) => setMpOrderId(e.target.value)}
+                  placeholder="ex: 12345678901"
                   className={INPUT_CLS}
                 />
               </Field>

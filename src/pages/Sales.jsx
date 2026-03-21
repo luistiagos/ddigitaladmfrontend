@@ -15,17 +15,26 @@ const ALL_STATUSES = [
   'charged_back', 'in_mediation', 'cancelled',
 ];
 
-const PROVIDERS = [{ value: 'mercadopago', label: 'Mercado Pago' }];
+const PROVIDERS = [
+  { value: 'mercadopago', label: 'Mercado Pago' },
+  { value: 'stripe', label: 'Stripe' },
+];
 
 const PROVIDER_META = {
   mercadopago: {
     label: 'Mercado Pago',
     cls: 'text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 ring-1 ring-cyan-500/30',
   },
+  stripe: {
+    label: 'Stripe',
+    cls: 'text-violet-400 bg-violet-500/10 hover:bg-violet-500/20 ring-1 ring-violet-500/30',
+  },
 };
 
 function getProvider(row) {
+  if (row.mpid && String(row.mpid).startsWith('cs_')) return 'stripe';
   if (row.mpid) return 'mercadopago';
+  if (row.payment_id) return 'stripe';
   return null;
 }
 
@@ -140,7 +149,10 @@ export default function Sales() {
           </button>
         ) : <span className="text-gray-600 text-xs">—</span>;
       },
-      csvValue: r => getProvider(r) ? 'Mercado Pago' : '',
+      csvValue: r => {
+        const p = getProvider(r);
+        return PROVIDER_META[p]?.label ?? '';
+      },
     },
     {
       key: 'actions', label: 'Ações',
@@ -236,18 +248,22 @@ export default function Sales() {
       />
 
       {detailRow && (
-        <MpDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
+        <ProviderDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
       )}
     </div>
   );
 }
 
-function MpDetailModal({ row, onClose }) {
+function ProviderDetailModal({ row, onClose }) {
+  const provider = getProvider(row);
+  const isStripe = provider === 'stripe';
+  const { label, cls } = PROVIDER_META[provider] ?? { label: 'Detalhes', cls: 'text-gray-400' };
+
   const fields = [
     { label: 'ID Transação', value: row.id },
-    { label: 'MP Payment ID', value: row.mpid },
-    { label: 'Payment ID Interno', value: row.payment_id },
-    { label: 'Preference ID', value: row.preference_id },
+    { label: isStripe ? 'Stripe Session ID' : 'MP Payment ID', value: row.mpid },
+    { label: 'Payment ID', value: row.payment_id },
+    !isStripe && { label: 'Preference ID', value: row.preference_id },
     { label: 'Status', value: row.status },
     { label: 'Valor', value: formatCurrency(row.value) },
     { label: 'Data / Hora', value: formatDateTime(row.datetime) },
@@ -258,7 +274,7 @@ function MpDetailModal({ row, onClose }) {
     { label: 'Cidade / Estado', value: [row.cidade, row.uf_nome || row.uf].filter(Boolean).join(' — ') || null },
     { label: 'CEP', value: row.zipcode },
     { label: 'Campanha', value: row.campaign },
-  ].filter((f) => f.value != null && f.value !== '');
+  ].filter(Boolean).filter((f) => f.value != null && f.value !== '');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
@@ -268,8 +284,8 @@ function MpDetailModal({ row, onClose }) {
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
           <div className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-cyan-400" />
-            <span className="text-sm font-semibold text-cyan-300">Mercado Pago — Detalhes da Transação</span>
+            <CreditCard className={`h-4 w-4 ${cls.match(/text-[\w-]+/)?.[0] ?? 'text-gray-400'}`} />
+            <span className={`text-sm font-semibold ${cls.match(/text-[\w-]+/)?.[0] ?? 'text-gray-300'}`}>{label} — Detalhes da Transação</span>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <X className="h-5 w-5" />
