@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import api from '@/services/api';
+import { ComboboxSelect } from '@/components/ui/ComboboxSelect';
 
 export default function SendProductModal({ onClose }) {
   const [products, setProducts] = useState([]);
@@ -111,19 +112,13 @@ export default function SendProductModal({ onClose }) {
                     <Loader2 className="h-4 w-4 animate-spin" /> Carregando produtos…
                   </div>
                 ) : (
-                  <select
+                  <ComboboxSelect
+                    options={products.map((p) => ({ value: p.id, label: p.title }))}
                     value={productId}
-                    onChange={(e) => setProductId(e.target.value)}
-                    className={INPUT_CLS}
+                    onChange={setProductId}
+                    placeholder="Pesquisar produto…"
                     required
-                  >
-                    <option value="">Selecione um produto</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
               </Field>
 
