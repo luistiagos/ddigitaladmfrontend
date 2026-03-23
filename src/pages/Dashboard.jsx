@@ -104,8 +104,10 @@ export default function Dashboard() {
   }, [date, metaOk]);
 
   const approvedTotal = stats?.approved_total || 0;
-  const mpFees = mpOk ? approvedTotal * 0.0499 : null;
-  const totalExpenses = (fbSpend ?? 0) + (mpFees ?? 0);
+  // MP fees are already deducted from Transaction.value at the time of approval
+  // (we store gross - actual_fees). Do NOT subtract again here.
+  const mpFees = mpOk ? stats?.mp_fees_total ?? null : null;
+  const totalExpenses = (fbSpend ?? 0);
   const hasExpenses = metaOk || mpOk;
   const lucroBruto = hasExpenses ? approvedTotal - totalExpenses : null;
 
@@ -150,7 +152,7 @@ export default function Dashboard() {
                 icon={<TrendingUp className="h-4 w-4" />}
                 label="Receita Total"
                 value={formatCurrency(approvedTotal)}
-                sub="Apenas aprovadas"
+                sub="Após taxas MP"
                 color="violet"
               />
             </>
@@ -231,8 +233,8 @@ export default function Dashboard() {
             <KpiCard
               icon={<Wallet className="h-4 w-4" />}
               label="Taxas MercadoPago"
-              value={loadingStats ? <Loader2 className="h-5 w-5 animate-spin text-gray-400" /> : formatCurrency(mpFees ?? 0)}
-              sub="~4,99% das aprovadas"
+              value={loadingStats ? <Loader2 className="h-5 w-5 animate-spin text-gray-400" /> : (mpFees !== null ? formatCurrency(mpFees) : '—')}
+              sub="já deduzidas da receita"
               color="cyan"
             />
           ) : (
