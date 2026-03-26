@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { formatCurrency } from '@/utils/format';
@@ -11,6 +11,7 @@ export default function Products() {
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -31,7 +32,9 @@ export default function Products() {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get('/admin/items', { params: { page, per_page: PER_PAGE } });
+      const params = { page, per_page: PER_PAGE };
+      if (search.trim()) params.title = search.trim();
+      const res = await api.get('/admin/items', { params });
       setProducts(res.data.items || []);
       setTotal(res.data.total || 0);
     } catch {
@@ -39,9 +42,14 @@ export default function Products() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, search]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
+
+  function handleSearchChange(val) {
+    setSearch(val);
+    setPage(1);
+  }
 
   function openCreate() {
     setEditing(null);
@@ -122,7 +130,7 @@ export default function Products() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-semibold text-white">Produtos</h1>
           <p className="text-sm text-gray-400 mt-1">Gerenciamento de pacotes ({total})</p>
@@ -133,6 +141,26 @@ export default function Products() {
         >
           <Plus className="h-4 w-4" /> Novo Produto
         </button>
+      </div>
+
+      {/* Search bar */}
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => handleSearchChange(e.target.value)}
+          placeholder="Buscar por nome do produto..."
+          className="w-full sm:w-80 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+        />
+        {search && (
+          <button
+            onClick={() => handleSearchChange('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {loading && (
