@@ -1,7 +1,300 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff } from 'lucide-react';
+﻿import { useState, useEffect, useCallback } from 'react';
+import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+
+// ---------------------------------------------------------------------------
+// StorePackagesModal  manage products / order-bumps linked to a store
+// ---------------------------------------------------------------------------
+
+const EMPTY_ADD = { package_id: '', principal: '0', active: true, price: '', relprice: '' };
+
+function StorePackagesModal({ store, onClose }) {
+  const [spItems, setSpItems] = useState([]);
+  const [allPkgs, setAllPkgs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState(EMPTY_ADD);
+  const [savingAdd, setSavingAdd] = useState(false);
+  const [addError, setAddError] = useState('');
+
+  const fetchSp = useCallback(async () => {
+    const res = await api.get(`/admin/stores/${store.id}/packages`);
+    setSpItems(res.data.items || []);
+  }, [store.id]);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      api.get(`/admin/stores/${store.id}/packages`),
+      api.get('/admin/items', { params: { per_page: 200, page: 1 } }),
+    ])
+      .then(([spRes, pkgRes]) => {
+        setSpItems(spRes.data.items || []);
+        setAllPkgs(pkgRes.data.items || []);
+      })
+      .finally(() => setLoading(false));
+  }, [store.id]);
+
+  function openEdit(sp) {
+    setEditingId(sp.id);
+    setEditForm({
+      principal: String(sp.principal ?? 0),
+      active: sp.active !== 0,
+      price: sp.price ?? '',
+      relprice: sp.relprice ?? '',
+    });
+  }
+
+  async function handleSaveEdit(sp) {
+    setSaving(true);
+    try {
+      await api.put(`/admin/stores/packages/${sp.id}`, {
+        principal: editForm.principal === '1',
+        active: editForm.active,
+        price: editForm.price || null,
+        relprice: editForm.relprice || null,
+      });
+      await fetchSp();
+      setEditingId(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(sp) {
+    setDeletingId(sp.id);
+    try {
+      await api.delete(`/admin/stores/packages/${sp.id}`);
+      setSpItems(items => items.filter(i => i.id !== sp.id));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleAdd() {
+    setAddError('');
+    if (!addForm.package_id) { setAddError('Selecione um produto.'); return; }
+    setSavingAdd(true);
+    try {
+      await api.post(`/admin/stores/${store.id}/packages`, {
+        package_id: Number(addForm.package_id),
+        principal: addForm.principal === '1',
+        active: addForm.active,
+        price: addForm.price || null,
+        relprice: addForm.relprice || null,
+      });
+      await fetchSp();
+      setAddForm(EMPTY_ADD);
+      setShowAdd(false);
+    } catch (err) {
+      setAddError(err.response?.data?.error || 'Erro ao adicionar.');
+    } finally {
+      setSavingAdd(false);
+    }
+  }
+
+  const linkedPkgIds = new Set(spItems.map(i => i.package_id));
+  const availablePkgs = allPkgs.filter(p => !linkedPkgIds.has(p.id));
+
+  const inputCls = 'w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-violet-500 placeholder-gray-500';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+      <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+          <h2 className="font-semibold text-white flex items-center gap-2">
+            <Package className="h-4 w-4 text-violet-400" />
+            Produtos — {store.name}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
+          {loading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-violet-400" />
+            </div>
+          )}
+
+          {!loading && spItems.length === 0 && !showAdd && (
+            <p className="text-gray-500 text-sm text-center py-6">Nenhum produto vinculado ainda.</p>
+          )}
+
+          {!loading && spItems.map(sp => (
+            <div key={sp.id} className="border border-gray-700 rounded-xl p-3 bg-gray-700/30">
+              {editingId === sp.id ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3">
+                    {sp.package_image
+                      ? <img src={sp.package_image} alt="" className="h-10 w-10 rounded object-cover shrink-0" />
+                      : <div className="h-10 w-10 rounded bg-gray-700 flex items-center justify-center shrink-0"><ImageOff className="h-4 w-4 text-gray-600" /></div>
+                    }
+                    <span className="font-medium text-white text-sm">{sp.package_title}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Tipo</label>
+                      <select value={editForm.principal} onChange={e => setEditForm(f => ({ ...f, principal: e.target.value }))} className={inputCls}>
+                        <option value="1">Principal</option>
+                        <option value="0">Order Bump</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Status</label>
+                      <select value={editForm.active ? '1' : '0'} onChange={e => setEditForm(f => ({ ...f, active: e.target.value === '1' }))} className={inputCls}>
+                        <option value="1">Ativo</option>
+                        <option value="0">Inativo</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Preço (override)</label>
+                      <input type="number" step="0.01" min="0" value={editForm.price}
+                        onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
+                        placeholder="Padrão do produto" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Preço de (riscado)</label>
+                      <input type="number" step="0.01" min="0" value={editForm.relprice}
+                        onChange={e => setEditForm(f => ({ ...f, relprice: e.target.value }))}
+                        placeholder="Opcional" className={inputCls} />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleSaveEdit(sp)} disabled={saving}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white transition-colors">
+                      {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Salvar
+                    </button>
+                    <button onClick={() => setEditingId(null)}
+                      className="px-3 py-2 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  {sp.package_image
+                    ? <img src={sp.package_image} alt="" className="h-10 w-10 rounded object-cover shrink-0" />
+                    : <div className="h-10 w-10 rounded bg-gray-700 flex items-center justify-center shrink-0"><ImageOff className="h-4 w-4 text-gray-600" /></div>
+                  }
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-white text-sm truncate">{sp.package_title}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${sp.principal ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                        {sp.principal ? 'Principal' : 'Order Bump'}
+                      </span>
+                      {!sp.active && <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-600 text-gray-400">Inativo</span>}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {sp.price != null
+                        ? `R$ ${Number(sp.price).toFixed(2)}`
+                        : `R$ ${Number(sp.package_price ?? 0).toFixed(2)} (padrão)`}
+                      {sp.relprice != null && `  de R$ ${Number(sp.relprice).toFixed(2)}`}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={() => openEdit(sp)}
+                      className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(sp)} disabled={deletingId === sp.id}
+                      className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-60">
+                      {deletingId === sp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Add form */}
+          {showAdd && !loading && (
+            <div className="border border-violet-500/40 rounded-xl p-4 space-y-3 bg-gray-700/20">
+              <h3 className="text-sm font-medium text-white">Adicionar Produto</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-400 mb-1">Produto *</label>
+                  <select value={addForm.package_id} onChange={e => setAddForm(f => ({ ...f, package_id: e.target.value }))} className={inputCls}>
+                    <option value="">Selecione...</option>
+                    {availablePkgs.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Tipo</label>
+                  <select value={addForm.principal} onChange={e => setAddForm(f => ({ ...f, principal: e.target.value }))} className={inputCls}>
+                    <option value="1">Principal</option>
+                    <option value="0">Order Bump</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Status</label>
+                  <select value={addForm.active ? '1' : '0'} onChange={e => setAddForm(f => ({ ...f, active: e.target.value === '1' }))} className={inputCls}>
+                    <option value="1">Ativo</option>
+                    <option value="0">Inativo</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Preço (override)</label>
+                  <input type="number" step="0.01" min="0" value={addForm.price}
+                    onChange={e => setAddForm(f => ({ ...f, price: e.target.value }))}
+                    placeholder="Padrão do produto" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Preço de (riscado)</label>
+                  <input type="number" step="0.01" min="0" value={addForm.relprice}
+                    onChange={e => setAddForm(f => ({ ...f, relprice: e.target.value }))}
+                    placeholder="Opcional" className={inputCls} />
+                </div>
+              </div>
+              {addError && <p className="text-sm text-red-400">{addError}</p>}
+              <div className="flex gap-2">
+                <button onClick={handleAdd} disabled={savingAdd}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white transition-colors">
+                  {savingAdd && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Adicionar
+                </button>
+                <button onClick={() => { setShowAdd(false); setAddError(''); setAddForm(EMPTY_ADD); }}
+                  className="px-3 py-2 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-700 shrink-0 flex justify-between items-center">
+          {!showAdd && !loading ? (
+            <button onClick={() => setShowAdd(true)}
+              className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white transition-colors">
+              <Plus className="h-4 w-4" /> Adicionar Produto
+            </button>
+          ) : <div />}
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stores page
+// ---------------------------------------------------------------------------
 
 const EMPTY_FORM = { name: '', url_thumb: '', url_page: '' };
 
@@ -20,6 +313,8 @@ export default function Stores() {
 
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [pkgStore, setPkgStore] = useState(null);
 
   const fetchStores = useCallback(async () => {
     setLoading(true);
@@ -120,7 +415,6 @@ export default function Stores() {
         </button>
       </div>
 
-      {/* States */}
       {loading && (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
@@ -133,12 +427,10 @@ export default function Stores() {
         <p className="text-gray-500 text-sm text-center py-16">Nenhuma store cadastrada.</p>
       )}
 
-      {/* Cards grid */}
       {!loading && !error && sorted.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {sorted.map(s => (
             <div key={s.id} className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden flex flex-col">
-              {/* Thumbnail */}
               <div className="h-36 bg-gray-700 flex items-center justify-center overflow-hidden">
                 {s.url_thumb ? (
                   <img
@@ -157,49 +449,47 @@ export default function Stores() {
                 </div>
               </div>
 
-              {/* Info */}
               <div className="p-4 flex flex-col gap-2 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="text-xs font-mono text-gray-500">#{s.id}</span>
-                    <h3 className="font-semibold text-white text-sm leading-tight">{s.name}</h3>
-                  </div>
+                <div>
+                  <span className="text-xs font-mono text-gray-500">#{s.id}</span>
+                  <h3 className="font-semibold text-white text-sm leading-tight">{s.name}</h3>
                 </div>
-
                 {s.url_page && (
-                  <a
-                    href={s.url_page}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 truncate"
-                  >
+                  <a href={s.url_page} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 truncate">
                     <ExternalLink className="h-3 w-3 shrink-0" />
                     <span className="truncate">{s.url_page}</span>
                   </a>
                 )}
               </div>
 
-              {/* Actions */}
-              <div className="px-4 pb-4 flex gap-2">
+              <div className="px-4 pb-4 flex flex-col gap-2">
                 <button
-                  onClick={() => openEdit(s)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                  onClick={() => setPkgStore(s)}
+                  className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-400 transition-colors"
                 >
-                  <Pencil className="h-3.5 w-3.5" /> Editar
+                  <Package className="h-3.5 w-3.5" /> Gerenciar Produtos
                 </button>
-                <button
-                  onClick={() => setToDelete(s)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Excluir
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openEdit(s)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Editar
+                  </button>
+                  <button
+                    onClick={() => setToDelete(s)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Excluir
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Create / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
           <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl">
@@ -246,7 +536,6 @@ export default function Stores() {
                   placeholder="https://..."
                   className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
                 />
-                {/* Thumbnail preview */}
                 {thumbPreview && (
                   <div className="mt-2 rounded-lg overflow-hidden border border-gray-600 bg-gray-700 h-32 flex items-center justify-center">
                     {!thumbError ? (
@@ -290,6 +579,10 @@ export default function Stores() {
             </form>
           </div>
         </div>
+      )}
+
+      {pkgStore && (
+        <StorePackagesModal store={pkgStore} onClose={() => setPkgStore(null)} />
       )}
 
       {toDelete && (
