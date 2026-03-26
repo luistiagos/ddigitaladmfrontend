@@ -73,6 +73,9 @@ function StorePackagesModal({ store, onClose }) {
     try {
       await api.delete(`/admin/stores/packages/${sp.id}`);
       setSpItems(items => items.filter(i => i.id !== sp.id));
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Erro ao excluir vínculo.';
+      alert(msg);
     } finally {
       setDeletingId(null);
     }
@@ -208,8 +211,9 @@ function StorePackagesModal({ store, onClose }) {
                       className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
-                    <button onClick={() => handleDelete(sp)} disabled={deletingId === sp.id}
-                      className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-60">
+                    <button onClick={() => handleDelete(sp)} disabled={deletingId === sp.id || sp.principal}
+                      title={sp.principal ? 'Demote o produto principal antes de excluí-lo' : 'Excluir'}
+                      className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                       {deletingId === sp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     </button>
                   </div>
