@@ -14,6 +14,8 @@ import {
   Settings2,
   Tag,
   Receipt,
+  Store,
+  Package,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SendProductModal from '@/modals/SendProductModal';
@@ -27,6 +29,8 @@ const NAV_ITEMS = [
   { to: '/leads', label: 'Leads', icon: Target },
   { to: '/configuracoes', label: 'Configurações', icon: Settings2 },
   { to: '/cupons', label: 'Cupons', icon: Tag },
+  { to: '/stores', label: 'Stores', icon: Store },
+  { to: '/produtos', label: 'Produtos', icon: Package },
 ];
 
 function NavItem({ to, label, icon: Icon, end, onClick }) {
