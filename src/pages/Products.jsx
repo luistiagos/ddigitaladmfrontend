@@ -1,35 +1,31 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Package } from 'lucide-react';
+﻿import { useState, useEffect, useCallback } from 'react';
+import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
-import AdminGrid from '@/components/ui/AdminGrid';
-import useAdminGrid from '@/utils/useAdminGrid';
 import { formatCurrency } from '@/utils/format';
 
-const EMPTY_FORM = {
-  title: '', price: '', image: '',
-  deliverlink: '', purchaselink: '',
-  add_pkg: '', prd_content: '',
-};
+const EMPTY_FORM = { title: '', price: '', image: '', purchaselink: '' };
+const PER_PAGE = 20;
 
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { page, setPage, sortColumn, sortDirection, handleSort } =
-    useAdminGrid({ defaultSort: 'title', defaultDir: 'asc' });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [imgPreview, setImgPreview] = useState('');
+  const [imgError, setImgError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  const PER_PAGE = 20;
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -50,6 +46,8 @@ export default function Products() {
   function openCreate() {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setImgPreview('');
+    setImgError(false);
     setFormError('');
     setModalOpen(true);
   }
@@ -60,13 +58,18 @@ export default function Products() {
       title: p.title || '',
       price: p.price != null ? String(p.price) : '',
       image: p.image || '',
-      deliverlink: p.deliverlink || '',
       purchaselink: p.purchaselink || '',
-      add_pkg: p.add_pkg || '',
-      prd_content: p.prd_content || '',
     });
+    setImgPreview(p.image || '');
+    setImgError(false);
     setFormError('');
     setModalOpen(true);
+  }
+
+  function handleImgChange(val) {
+    setForm(f => ({ ...f, image: val }));
+    setImgPreview(val);
+    setImgError(false);
   }
 
   async function handleSave(e) {
@@ -82,10 +85,10 @@ export default function Products() {
         title,
         price,
         image: form.image.trim() || null,
-        deliverlink: form.deliverlink.trim() || null,
         purchaselink: form.purchaselink.trim() || null,
-        add_pkg: form.add_pkg.trim() || null,
-        prd_content: form.prd_content.trim() || null,
+        deliverlink: editing?.deliverlink || null,
+        add_pkg: editing?.add_pkg || null,
+        prd_content: editing?.prd_content || null,
       };
       if (editing) {
         await api.put(`/admin/items/${editing.id}`, payload);
@@ -115,81 +118,14 @@ export default function Products() {
     }
   }
 
-  const sorted = useMemo(() => {
-    return [...products].sort((a, b) => {
-      const v1 = sortColumn === 'price' ? (a.price ?? 0) : String(a[sortColumn] ?? '').toLowerCase();
-      const v2 = sortColumn === 'price' ? (b.price ?? 0) : String(b[sortColumn] ?? '').toLowerCase();
-      if (v1 < v2) return sortDirection === 'asc' ? -1 : 1;
-      if (v1 > v2) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [products, sortColumn, sortDirection]);
-
-  const columns = [
-    {
-      key: 'id', label: 'ID', sortable: true,
-      render: r => <span className="text-gray-400 text-xs font-mono">{r.id}</span>,
-      csvValue: r => r.id ?? '',
-    },
-    {
-      key: 'image', label: 'Imagem', sortable: false,
-      render: r => r.image
-        ? <img src={r.image} alt="" className="h-10 w-10 rounded-lg object-cover" onError={e => { e.target.style.display = 'none'; }} />
-        : <div className="h-10 w-10 rounded-lg bg-gray-700 flex items-center justify-center"><Package className="h-4 w-4 text-gray-500" /></div>,
-      csvValue: r => r.image || '',
-    },
-    {
-      key: 'title', label: 'Título', sortable: true,
-      render: r => <span className="font-medium text-white">{r.title}</span>,
-      csvValue: r => r.title ?? '',
-    },
-    {
-      key: 'price', label: 'Preço', sortable: true,
-      render: r => <span className="text-green-400 font-medium">{formatCurrency(r.price)}</span>,
-      csvValue: r => r.price ?? '',
-    },
-    {
-      key: 'deliverlink', label: 'Link de Entrega', sortable: false,
-      render: r => r.deliverlink
-        ? <a href={r.deliverlink} target="_blank" rel="noreferrer" className="text-violet-400 hover:underline text-xs truncate max-w-40 block">{r.deliverlink}</a>
-        : <span className="text-gray-600 text-xs">—</span>,
-      csvValue: r => r.deliverlink || '',
-    },
-    {
-      key: 'prd_content', label: 'Conteúdo', sortable: false,
-      render: r => r.prd_content
-        ? <span className="text-gray-300 text-xs truncate max-w-50 block" title={r.prd_content}>{r.prd_content}</span>
-        : <span className="text-gray-600 text-xs">—</span>,
-      csvValue: r => r.prd_content || '',
-    },
-    {
-      key: 'actions', label: 'Ações',
-      render: r => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => openEdit(r)}
-            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Editar
-          </button>
-          <button
-            onClick={() => setToDelete(r)}
-            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
-          >
-            <Trash2 className="h-3.5 w-3.5" /> Excluir
-          </button>
-        </div>
-      ),
-      csvValue: () => '',
-    },
-  ];
+  const inputCls = 'w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500';
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-white">Produtos</h1>
-          <p className="text-sm text-gray-400 mt-1">Gerenciamento de pacotes (Package)</p>
+          <p className="text-sm text-gray-400 mt-1">Gerenciamento de pacotes ({total})</p>
         </div>
         <button
           onClick={openCreate}
@@ -199,26 +135,105 @@ export default function Products() {
         </button>
       </div>
 
-      <AdminGrid
-        columns={columns}
-        data={{ items: sorted, total }}
-        loading={loading}
-        error={error}
-        emptyMessage="Nenhum produto cadastrado."
-        page={page}
-        perPage={PER_PAGE}
-        onPageChange={setPage}
-        sortColumn={sortColumn}
-        sortDirection={sortDirection}
-        onSort={handleSort}
-        totalLabel="produto"
-        title="Produtos"
-      />
+      {loading && (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
+        </div>
+      )}
+      {!loading && error && (
+        <p className="text-red-400 text-sm text-center py-8">{error}</p>
+      )}
+      {!loading && !error && products.length === 0 && (
+        <p className="text-gray-500 text-sm text-center py-16">Nenhum produto cadastrado.</p>
+      )}
+
+      {!loading && !error && products.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {products.map(p => (
+              <div key={p.id} className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden flex flex-col">
+                {/* Image */}
+                <div className="h-36 bg-gray-700 flex items-center justify-center overflow-hidden">
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt={p.title}
+                      className="w-full h-full object-cover"
+                      onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                    />
+                  ) : null}
+                  <div
+                    className="w-full h-full items-center justify-center flex-col gap-1"
+                    style={{ display: p.image ? 'none' : 'flex' }}
+                  >
+                    <ImageOff className="h-8 w-8 text-gray-600" />
+                    <span className="text-xs text-gray-600">Sem imagem</span>
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="p-4 flex flex-col gap-2 flex-1">
+                  <h3 className="font-semibold text-white text-sm leading-tight">{p.title}</h3>
+                  <span className="text-green-400 font-semibold text-base">{formatCurrency(p.price)}</span>
+                  {p.purchaselink && (
+                    <a href={p.purchaselink} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 truncate">
+                      <ShoppingCart className="h-3 w-3 shrink-0" />
+                      <span className="truncate">Link de Compra</span>
+                    </a>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="px-4 pb-4 flex gap-2">
+                  <button
+                    onClick={() => openEdit(p)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Editar
+                  </button>
+                  <button
+                    onClick={() => setToDelete(p)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Excluir
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <span className="text-sm text-gray-400">
+                Página {page} de {totalPages} ({total} produtos)
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 disabled:opacity-40 transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 disabled:opacity-40 transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Create / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="w-full max-w-lg bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+          <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
               <h2 className="font-semibold text-white flex items-center gap-2">
                 <Package className="h-4 w-4 text-violet-400" />
@@ -230,63 +245,28 @@ export default function Products() {
             </div>
 
             <form onSubmit={handleSave} className="px-6 py-5 flex flex-col gap-4 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Título *</label>
-                  <input
-                    type="text"
-                    value={form.title}
-                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                    placeholder="ex: Pacote Xbox 360"
-                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Preço (R$) *</label>
-                  <input
-                    type="number"
-                    min="0" step="0.01"
-                    value={form.price}
-                    onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-                    placeholder="ex: 39.90"
-                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Add PKG</label>
-                  <input
-                    type="text"
-                    value={form.add_pkg}
-                    onChange={e => setForm(f => ({ ...f, add_pkg: e.target.value }))}
-                    placeholder="ex: extra"
-                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">URL da Imagem</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Título *</label>
                 <input
-                  type="url"
-                  value={form.image}
-                  onChange={e => setForm(f => ({ ...f, image: e.target.value }))}
-                  placeholder="https://..."
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  type="text"
+                  value={form.title}
+                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="ex: Pacote Xbox 360"
+                  className={inputCls}
+                  required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Link de Entrega</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Preço (R$) *</label>
                 <input
-                  type="url"
-                  value={form.deliverlink}
-                  onChange={e => setForm(f => ({ ...f, deliverlink: e.target.value }))}
-                  placeholder="https://..."
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  type="number"
+                  min="0" step="0.01"
+                  value={form.price}
+                  onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+                  placeholder="ex: 39.90"
+                  className={inputCls}
+                  required
                 />
               </div>
 
@@ -297,19 +277,36 @@ export default function Products() {
                   value={form.purchaselink}
                   onChange={e => setForm(f => ({ ...f, purchaselink: e.target.value }))}
                   placeholder="https://..."
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  className={inputCls}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Conteúdo do Produto</label>
-                <textarea
-                  value={form.prd_content}
-                  onChange={e => setForm(f => ({ ...f, prd_content: e.target.value }))}
-                  placeholder="Descrição do conteúdo..."
-                  rows={3}
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500 resize-none"
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">URL da Imagem</label>
+                <input
+                  type="url"
+                  value={form.image}
+                  onChange={e => handleImgChange(e.target.value)}
+                  placeholder="https://..."
+                  className={inputCls}
                 />
+                {imgPreview && (
+                  <div className="mt-2 rounded-lg overflow-hidden border border-gray-600 bg-gray-700 h-32 flex items-center justify-center">
+                    {!imgError ? (
+                      <img
+                        src={imgPreview}
+                        alt="preview"
+                        className="w-full h-full object-cover"
+                        onError={() => setImgError(true)}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-gray-500">
+                        <ImageOff className="h-6 w-6" />
+                        <span className="text-xs">URL inválida ou imagem não carregou</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {formError && (
