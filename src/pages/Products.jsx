@@ -4,7 +4,7 @@ import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { formatCurrency } from '@/utils/format';
 
-const EMPTY_FORM = { title: '', price: '', image: '', purchaselink: '' };
+const EMPTY_FORM = { title: '', price: '', image: '', purchaselink: '', deliverlink: '' };
 const PER_PAGE = 20;
 
 export default function Products() {
@@ -67,6 +67,7 @@ export default function Products() {
       price: p.price != null ? String(p.price) : '',
       image: p.image || '',
       purchaselink: p.purchaselink || '',
+      deliverlink: p.deliverlink || '',
     });
     setImgPreview(p.image || '');
     setImgError(false);
@@ -94,7 +95,7 @@ export default function Products() {
         price,
         image: form.image.trim() || null,
         purchaselink: form.purchaselink.trim() || null,
-        deliverlink: editing?.deliverlink || null,
+        deliverlink: form.deliverlink.trim() || null,
         add_pkg: editing?.add_pkg || null,
         prd_content: editing?.prd_content || null,
       };
@@ -210,6 +211,13 @@ export default function Products() {
                       <span className="truncate">Link de Compra</span>
                     </a>
                   )}
+                  {p.deliverlink && (
+                    <a href={p.deliverlink} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 truncate">
+                      <Package className="h-3 w-3 shrink-0" />
+                      <span className="truncate">Link de Entrega</span>
+                    </a>
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -304,6 +312,17 @@ export default function Products() {
                   type="url"
                   value={form.purchaselink}
                   onChange={e => setForm(f => ({ ...f, purchaselink: e.target.value }))}
+                  placeholder="https://..."
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Link de Entrega</label>
+                <input
+                  type="url"
+                  value={form.deliverlink}
+                  onChange={e => setForm(f => ({ ...f, deliverlink: e.target.value }))}
                   placeholder="https://..."
                   className={inputCls}
                 />
