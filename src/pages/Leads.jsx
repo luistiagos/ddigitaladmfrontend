@@ -72,9 +72,9 @@ export default function Leads() {
       csvValue: r => r.phone ?? '',
     },
     {
-      key: 'product', label: 'Produto', sortable: true,
-      render: r => r.product || '—',
-      csvValue: r => r.product ?? '',
+      key: 'store_name', label: 'Loja', sortable: true,
+      render: r => r.store_name || '—',
+      csvValue: r => r.store_name ?? '',
     },
     {
       key: 'dttime', label: 'Data', sortable: true,
