@@ -14,6 +14,7 @@ import Coupons from '@/pages/Coupons';
 import Transactions from '@/pages/Transactions';
 import Stores from '@/pages/Stores';
 import Products from '@/pages/Products';
+import BotConfig from '@/pages/BotConfig';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="disputas" element={<Disputes />} />
             <Route path="leads" element={<Leads />} />
             <Route path="configuracoes" element={<Settings />} />
+            <Route path="bot" element={<BotConfig />} />
             <Route path="cupons" element={<Coupons />} />
             <Route path="transacoes" element={<Transactions />} />
             <Route path="stores" element={<Stores />} />

@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, Save, CheckCircle, Settings2, Bot } from 'lucide-react';
+import { Eye, EyeOff, Save, CheckCircle, Settings2 } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import { getSettings, saveSettings, hasProvider } from '@/utils/settings';
-import api from '@/services/api';
 
 const PROVIDERS = [
   {
@@ -96,31 +95,6 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const savedTimerRef = useRef(null);
 
-  // Bot toggle state
-  const [botEnabled, setBotEnabled] = useState(true);
-  const [botStatus, setBotStatus] = useState('idle'); // idle | saving | saved | error
-
-  useEffect(() => {
-    api.get('/admin/wpp/bot_status')
-      .then((res) => setBotEnabled(res.data.bot_enabled ?? true))
-      .catch(() => {});
-  }, []);
-
-  async function toggleBot() {
-    const newValue = !botEnabled;
-    setBotEnabled(newValue);
-    setBotStatus('saving');
-    try {
-      await api.post('/admin/wpp/bot_status', { bot_enabled: newValue });
-      setBotStatus('saved');
-      setTimeout(() => setBotStatus('idle'), 3000);
-    } catch {
-      setBotEnabled(!newValue); // reverte
-      setBotStatus('error');
-      setTimeout(() => setBotStatus('idle'), 3000);
-    }
-  }
-
   useEffect(() => () => { clearTimeout(savedTimerRef.current); }, []);
 
   function toggleShow(id) {
@@ -151,33 +125,6 @@ export default function Settings() {
       </div>
 
       <div className="space-y-5">
-        {/* WhatsApp Bot toggle */}
-        <div className={`bg-gray-800/60 border rounded-xl p-6 transition-colors ${botEnabled ? 'border-green-500/30' : 'border-gray-700'}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className={`text-base font-semibold flex items-center gap-2 ${botEnabled ? 'text-green-400' : 'text-gray-400'}`}>
-                <Bot className="h-4 w-4" />
-                Bot WhatsApp
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Quando desabilitado, o bot não responde automaticamente. Apenas atendimento humano.
-              </p>
-              {botStatus === 'saving' && <p className="text-xs text-gray-500 mt-1.5">Salvando...</p>}
-              {botStatus === 'saved' && <p className="text-xs text-green-400 mt-1.5">✓ Configuração salva</p>}
-              {botStatus === 'error' && <p className="text-xs text-red-400 mt-1.5">Erro ao salvar</p>}
-            </div>
-            <button
-              type="button"
-              onClick={toggleBot}
-              disabled={botStatus === 'saving'}
-              aria-label={botEnabled ? 'Desabilitar bot' : 'Habilitar bot'}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:opacity-50 ${botEnabled ? 'bg-green-500' : 'bg-gray-600'}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${botEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
-          </div>
-        </div>
-
         {PROVIDERS.map((provider) => {
           const connected = hasProvider(provider.key);
           return (
