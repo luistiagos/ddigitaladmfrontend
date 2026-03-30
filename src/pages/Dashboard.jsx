@@ -71,7 +71,6 @@ export default function Dashboard() {
   const [fbError, setFbError] = useState('');
 
   const metaOk = hasProvider('meta');
-  const mpOk = hasProvider('mp');
 
   // Fetch DB stats
   useEffect(() => {
@@ -104,11 +103,9 @@ export default function Dashboard() {
   }, [date, metaOk]);
 
   const approvedTotal = stats?.approved_total || 0;
-  // MP fees are already deducted from Transaction.value at the time of approval
-  // (we store gross - actual_fees). Do NOT subtract again here.
-  const mpFees = mpOk ? stats?.mp_fees_total ?? null : null;
+  const mpFees = stats?.mp_fees_total ?? null;
   const totalExpenses = (fbSpend ?? 0);
-  const hasExpenses = metaOk || mpOk;
+  const hasExpenses = metaOk;
   const lucroBruto = hasExpenses ? approvedTotal - totalExpenses : null;
 
   return (
@@ -229,17 +226,13 @@ export default function Dashboard() {
           )}
 
           {/* MercadoPago */}
-          {mpOk ? (
-            <KpiCard
-              icon={<Wallet className="h-4 w-4" />}
-              label="Taxas MercadoPago"
-              value={loadingStats ? <Loader2 className="h-5 w-5 animate-spin text-gray-400" /> : (mpFees !== null ? formatCurrency(mpFees) : '—')}
-              sub="já deduzidas da receita"
-              color="cyan"
-            />
-          ) : (
-            <NotConfiguredCard label="MercadoPago" />
-          )}
+          <KpiCard
+            icon={<Wallet className="h-4 w-4" />}
+            label="Taxas MercadoPago"
+            value={loadingStats ? <Loader2 className="h-5 w-5 animate-spin text-gray-400" /> : formatCurrency(mpFees ?? 0)}
+            sub="já deduzidas da receita"
+            color="cyan"
+          />
 
           {/* Total Despesas — só quando todos os providers carregaram */}
           {hasExpenses && (!metaOk || !loadingFb || fbError) && !loadingStats && (
