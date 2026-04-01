@@ -17,6 +17,7 @@ import {
   Store,
   Package,
   Bot,
+  MailSearch,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SendProductModal from '@/modals/SendProductModal';
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { to: '/cupons', label: 'Cupons', icon: Tag },
   { to: '/stores', label: 'Stores', icon: Store },
   { to: '/produtos', label: 'Produtos', icon: Package },
+  { to: '/email-activity', label: 'Email Activity', icon: MailSearch },
 ];
 
 function NavItem({ to, label, icon: Icon, end, onClick }) {

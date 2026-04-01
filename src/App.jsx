@@ -15,6 +15,7 @@ import Transactions from '@/pages/Transactions';
 import Stores from '@/pages/Stores';
 import Products from '@/pages/Products';
 import BotConfig from '@/pages/BotConfig';
+import EmailActivity from '@/pages/EmailActivity';
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="transacoes" element={<Transactions />} />
             <Route path="stores" element={<Stores />} />
             <Route path="produtos" element={<Products />} />
+            <Route path="email-activity" element={<EmailActivity />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
