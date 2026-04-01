@@ -40,7 +40,7 @@ function getProvider(row) {
 
 const getEmptyFilters = () => ({
   email: '', phone: '', product_id: '', store_id: '',
-  status: '', provider: '',
+  status: '', provider: '', mpid: '',
   start_date: todayISO(), end_date: todayISO(),
 });
 
@@ -74,6 +74,7 @@ export default function Sales() {
       if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.status) params.set('status', applied.status);
       if (applied.provider) params.set('provider', applied.provider);
+      if (applied.mpid) params.set('mpid', applied.mpid);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
       params.set('sort_column', sortColumn);
@@ -184,6 +185,7 @@ export default function Sales() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <TxtInput placeholder="E-mail" value={filters.email} onChange={(v) => setFilters((f) => ({ ...f, email: v }))} />
           <TxtInput placeholder="Telefone" value={filters.phone} onChange={(v) => setFilters((f) => ({ ...f, phone: v }))} />
+          <TxtInput placeholder="Nº Mercado Pago / ID" value={filters.mpid} onChange={(v) => setFilters((f) => ({ ...f, mpid: v }))} />
           <select
             value={filters.product_id}
             onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}
