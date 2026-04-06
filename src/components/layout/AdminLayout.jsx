@@ -19,6 +19,7 @@ import {
   Bot,
   MailSearch,
   MailWarning,
+  TriangleAlert,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SendProductModal from '@/modals/SendProductModal';
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   { to: '/produtos', label: 'Produtos', icon: Package },
   { to: '/email-activity', label: 'Email Activity', icon: MailSearch },
   { to: '/email-queue', label: 'Fila de Emails', icon: MailWarning },
+  { to: '/erros', label: 'Log de Erros', icon: TriangleAlert },
 ];
 
 function NavItem({ to, label, icon: Icon, end, onClick }) {

@@ -17,6 +17,7 @@ import Products from '@/pages/Products';
 import BotConfig from '@/pages/BotConfig';
 import EmailActivity from '@/pages/EmailActivity';
 import EmailQueue from '@/pages/EmailQueue';
+import ErrorLog from '@/pages/ErrorLog';
 
 export default function App() {
   return (
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="produtos" element={<Products />} />
             <Route path="email-activity" element={<EmailActivity />} />
             <Route path="email-queue" element={<EmailQueue />} />
+            <Route path="erros" element={<ErrorLog />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
