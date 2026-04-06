@@ -10,20 +10,21 @@ import useAdminGrid from '@/utils/useAdminGrid';
 const PER_PAGE = 20;
 
 const ALL_STATUSES = [
-  'delivered', 'bounce', 'dropped', 'open', 'click',
+  'delivered', 'not_delivered', 'bounce', 'dropped', 'open', 'click',
   'processed', 'deferred', 'spamreport', 'unsubscribe',
 ];
 
 const STATUS_VARIANT = {
-  delivered:   'success',
-  open:        'info',
-  click:       'info',
-  processed:   'neutral',
-  deferred:    'warning',
-  bounce:      'danger',
-  dropped:     'danger',
-  spamreport:  'danger',
-  unsubscribe: 'warning',
+  delivered:     'success',
+  not_delivered: 'danger',
+  open:          'info',
+  click:         'info',
+  processed:     'neutral',
+  deferred:      'warning',
+  bounce:        'danger',
+  dropped:       'danger',
+  spamreport:    'danger',
+  unsubscribe:   'warning',
 };
 
 const EMPTY_FILTERS = {
