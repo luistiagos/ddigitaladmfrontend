@@ -7,7 +7,12 @@ import useAdminGrid from '@/utils/useAdminGrid';
 
 const PER_PAGE = 20;
 
-const EMPTY_FILTERS = { file: '', method: '', start_date: '', end_date: '' };
+const EMPTY_FILTERS = { file: '', method: '', project: '', start_date: '', end_date: '' };
+
+const KNOWN_PROJECTS = [
+  'emuladores.github.io',
+  'digitalmemberarea.digitalstoregames.com',
+];
 
 export default function ErrorLog() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -31,6 +36,7 @@ export default function ErrorLog() {
       });
       if (applied.file)       params.set('file',       applied.file);
       if (applied.method)     params.set('method',     applied.method);
+      if (applied.project)    params.set('project',    applied.project);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date)   params.set('end_date',   applied.end_date);
       const res = await api.get(`/admin/errors?${params}`);
@@ -81,6 +87,12 @@ export default function ErrorLog() {
         </span>
       ),
       csvValue: r => r.message ?? '',
+    },
+    {
+      key: 'project', label: 'Projeto',
+      className: 'px-4 py-3 text-gray-400 text-xs whitespace-nowrap',
+      render: r => r.project || '—',
+      csvValue: r => r.project ?? '',
     },
     {
       key: 'platform', label: 'Plataforma',
@@ -137,6 +149,17 @@ export default function ErrorLog() {
       {/* Filters */}
       <form onSubmit={applyFilters} className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6">
         <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-500">Projeto</label>
+            <select
+              value={filters.project}
+              onChange={e => setFilters(f => ({ ...f, project: e.target.value }))}
+              className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+            >
+              <option value="">Todos os projetos</option>
+              {KNOWN_PROJECTS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-500">Arquivo</label>
             <input
