@@ -214,23 +214,20 @@ export default function ErrorLog() {
         </div>
       </form>
 
-      {error && (
-        <div className="mb-4 px-4 py-2 rounded-lg text-sm bg-red-900/40 text-red-300">{error}</div>
-      )}
-
       <AdminGrid
         columns={columns}
-        rows={data.items}
+        data={data}
         loading={loading}
-        total={data.total}
+        error={error}
+        emptyMessage="Nenhum erro encontrado."
         page={page}
         perPage={PER_PAGE}
         onPageChange={setPage}
         sortColumn={sortColumn}
         sortDirection={sortDirection}
         onSort={handleSort}
-        csvFilename="erros.csv"
-        emptyMessage="Nenhum erro encontrado."
+        totalLabel="erro"
+        title="erros"
       />
     </div>
   );
