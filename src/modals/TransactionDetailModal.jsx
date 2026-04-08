@@ -10,17 +10,23 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
   const [remarketing, setRemarketing] = useState(false); // loading wpp link
+  const [wppError, setWppError] = useState(''); // error message for wpp recovery
 
   const showRemarketing = REMARKET_STATUSES.includes(tx.status) && tx.phone;
 
   async function handleOpenWpp() {
     setRemarketing(true);
+    setWppError('');
     try {
       const res = await api.get(`/admin/remarket_wpp/${tx.id}`);
       const url = res.data?.wpp_url;
-      if (url) window.open(url, '_blank', 'noopener,noreferrer');
-    } catch {
-      // silently ignore
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        setWppError('Não foi possível gerar o link — telefone não encontrado.');
+      }
+    } catch (err) {
+      setWppError(err.response?.data?.error || 'Erro ao gerar link de remarketing.');
     } finally {
       setRemarketing(false);
     }
@@ -29,6 +35,7 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
   async function handleSend() {
     setSending(true);
     setResults(null);
+    setWppError('');
 
     const emailPayload = {
       email: tx.email,
@@ -72,7 +79,7 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[60vh]">
           {/* Info grid */}
           <div className="grid grid-cols-2 gap-3">
             <InfoField label="ID" value={tx.id ?? '—'} />
@@ -112,6 +119,13 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
             </div>
           )}
         </div>
+
+        {/* WA Recovery error — outside scroll area so always visible */}
+        {wppError && (
+          <div className="mx-6 mt-3 rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-xs text-red-400">
+            {wppError}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex flex-wrap gap-2 px-6 pb-5">
