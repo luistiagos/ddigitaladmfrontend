@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Eye } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import { formatDateTime, formatCurrency } from '@/utils/format';
 import useAdminGrid from '@/utils/useAdminGrid';
+import TransactionDetailModal from '@/modals/TransactionDetailModal';
 
 const PER_PAGE = 20;
 
@@ -28,6 +29,7 @@ export default function Transactions() {
   const [data, setData] = useState({ items: [], total: 0, total_value: null });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedTx, setSelectedTx] = useState(null);
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'datetime', defaultDir: 'desc' });
 
@@ -109,10 +111,30 @@ export default function Transactions() {
       render: r => r.store_name || '—',
       csvValue: r => r.store_name ?? '',
     },
+    {
+      key: '_actions', label: '',
+      className: 'px-4 py-3 text-right',
+      render: r => (
+        <button
+          type="button"
+          onClick={() => setSelectedTx(r)}
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs text-gray-300 hover:text-white transition-colors"
+        >
+          <Eye className="h-3.5 w-3.5" /> Visualizar
+        </button>
+      ),
+      csvValue: () => '',
+    },
   ];
 
   return (
     <div>
+      {selectedTx && (
+        <TransactionDetailModal
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
+        />
+      )}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Transações</h1>
         <p className="text-sm text-gray-400 mt-1">
