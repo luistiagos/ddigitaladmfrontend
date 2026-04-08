@@ -6,6 +6,44 @@ import { formatDateTime, formatCurrency } from '@/utils/format';
 
 const REMARKET_STATUSES = ['create', 'pending'];
 
+// Human-readable labels for MercadoPago payment_method_id / payment_type_id
+const PAYMENT_METHOD_LABELS = {
+  pix: 'Pix',
+  bolbradesco: 'Boleto Bradesco',
+  pec: 'Boleto (PEC)',
+  pagofacil: 'Pago Fácil',
+  rapipago: 'Rapipago',
+  visa: 'Visa',
+  master: 'Mastercard',
+  amex: 'American Express',
+  elo: 'Elo',
+  hipercard: 'Hipercard',
+  cabal: 'Cabal',
+  naranja: 'Naranja',
+  debvisa: 'Visa Débito',
+  debmaster: 'Mastercard Débito',
+  maestro: 'Maestro',
+  melicard: 'Mercado Crédito',
+};
+
+const PAYMENT_TYPE_LABELS = {
+  bank_transfer: 'Pix / TED',
+  credit_card: 'Cartão de Crédito',
+  debit_card: 'Cartão de Débito',
+  ticket: 'Boleto',
+  prepaid_card: 'Cartão Pré-pago',
+  digital_currency: 'Moeda Digital',
+  digital_wallet: 'Carteira Digital',
+};
+
+function paymentMethodLabel(methodId, typeId) {
+  if (!methodId && !typeId) return null;
+  const method = PAYMENT_METHOD_LABELS[methodId] || methodId;
+  const type = PAYMENT_TYPE_LABELS[typeId] || typeId;
+  if (method && type && method !== type) return `${method} (${type})`;
+  return method || type;
+}
+
 export default function TransactionDetailModal({ transaction: tx, onClose }) {
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
@@ -96,6 +134,14 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
             <InfoField label="Payment ID" value={tx.payment_id || '—'} />
             <InfoField label="Preference ID" value={tx.preference_id || '—'} />
             <InfoField label="Campanha" value={tx.campaign || '—'} />
+            {(tx.payment_method_id || tx.payment_type_id) && (
+              <InfoField label="Meio de Pagamento">
+                <PaymentBadge methodId={tx.payment_method_id} typeId={tx.payment_type_id} />
+              </InfoField>
+            )}
+            {tx.issuer_name && (
+              <InfoField label="Banco / Emissor" value={tx.issuer_name} />
+            )}
             <InfoField label="Cidade" value={tx.cidade ? `${tx.cidade}${tx.uf ? ` / ${tx.uf}` : ''}` : '—'} />
             <InfoField label="Estado" value={tx.uf_nome || '—'} />
             <InfoField label="CEP" value={tx.zipcode || '—'} />
@@ -170,6 +216,20 @@ function InfoField({ label, value, children }) {
       <div className="text-xs text-gray-500 mb-0.5 font-medium">{label}</div>
       {children ?? <div className="text-sm text-gray-200 break-all">{value}</div>}
     </div>
+  );
+}
+
+function PaymentBadge({ methodId, typeId }) {
+  const label = paymentMethodLabel(methodId, typeId);
+  let color = 'bg-gray-600 text-gray-200';
+  if (methodId === 'pix' || typeId === 'bank_transfer') color = 'bg-teal-600/30 text-teal-300';
+  else if (typeId === 'credit_card') color = 'bg-blue-600/30 text-blue-300';
+  else if (typeId === 'debit_card') color = 'bg-indigo-600/30 text-indigo-300';
+  else if (typeId === 'ticket') color = 'bg-orange-600/30 text-orange-300';
+  return (
+    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${color}`}>
+      {label || '—'}
+    </span>
   );
 }
 
