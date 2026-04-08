@@ -68,12 +68,6 @@ export default function Transactions() {
 
   const columns = [
     {
-      key: 'id', label: '#',
-      className: 'px-4 py-3 text-gray-500 text-xs font-mono',
-      render: r => r.id,
-      csvValue: r => r.id ?? '',
-    },
-    {
       key: 'email', label: 'E-mail', sortable: true, fullCell: true,
       render: r => <EmailCell email={r.email} />,
       csvValue: r => r.email ?? '',
@@ -104,12 +98,6 @@ export default function Transactions() {
       key: 'status', label: 'Status', sortable: true,
       render: r => <Badge variant={statusVariant(r.status)}>{r.status || '—'}</Badge>,
       csvValue: r => r.status ?? '',
-    },
-    {
-      key: 'store_name', label: 'Loja', sortable: true,
-      className: 'px-4 py-3 text-gray-400 text-xs whitespace-nowrap',
-      render: r => r.store_name || '—',
-      csvValue: r => r.store_name ?? '',
     },
     {
       key: '_actions', label: '',

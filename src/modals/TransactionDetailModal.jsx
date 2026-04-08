@@ -15,13 +15,13 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
     const emailPayload = {
       email: tx.email,
       product_id: tx.product_id,
-      ...(tx.mp_order_id ? { mp_order_id: String(tx.mp_order_id) } : {}),
+      ...(tx.mpid ? { mp_order_id: String(tx.mpid) } : {}),
     };
     const whatsPayload = {
       email: tx.email,
       phone: tx.phone || '',
       product_id: tx.product_id,
-      ...(tx.mp_order_id ? { mp_order_id: String(tx.mp_order_id) } : {}),
+      ...(tx.mpid ? { mp_order_id: String(tx.mpid) } : {}),
     };
 
     const emailResult = await api.post('/admin/manualdeliver_v2', emailPayload)
@@ -57,17 +57,23 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
         <div className="px-6 py-5 space-y-4">
           {/* Info grid */}
           <div className="grid grid-cols-2 gap-3">
+            <InfoField label="ID" value={tx.id ?? '—'} />
+            <InfoField label="Status">
+              <Badge variant={statusVariant(tx.status)}>{tx.status || '—'}</Badge>
+            </InfoField>
             <InfoField label="E-mail" value={tx.email || '—'} />
             <InfoField label="Telefone" value={tx.phone || '—'} />
             <InfoField label="Produto" value={tx.title || '—'} />
             <InfoField label="Valor" value={formatCurrency(tx.value)} />
             <InfoField label="Data/Hora" value={formatDateTime(tx.datetime)} />
-            <InfoField label="Status">
-              <Badge variant={statusVariant(tx.status)}>{tx.status || '—'}</Badge>
-            </InfoField>
             <InfoField label="Loja" value={tx.store_name || '—'} />
-            <InfoField label="Order ID" value={tx.mp_order_id || '—'} />
-            {tx.campaign && <InfoField label="Campanha" value={tx.campaign} />}
+            <InfoField label="MP ID (mpid)" value={tx.mpid || '—'} />
+            <InfoField label="Payment ID" value={tx.payment_id || '—'} />
+            <InfoField label="Preference ID" value={tx.preference_id || '—'} />
+            <InfoField label="Campanha" value={tx.campaign || '—'} />
+            <InfoField label="Cidade" value={tx.cidade ? `${tx.cidade}${tx.uf ? ` / ${tx.uf}` : ''}` : '—'} />
+            <InfoField label="Estado" value={tx.uf_nome || '—'} />
+            <InfoField label="CEP" value={tx.zipcode || '—'} />
           </div>
 
           {/* Send results */}
