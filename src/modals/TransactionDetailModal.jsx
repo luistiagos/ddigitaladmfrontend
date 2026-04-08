@@ -1,12 +1,30 @@
 import { useState } from 'react';
-import { X, Send, Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { X, Send, Loader2, CheckCircle, XCircle, Eye, MessageCircle } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import { formatDateTime, formatCurrency } from '@/utils/format';
 
+const REMARKET_STATUSES = ['create', 'pending'];
+
 export default function TransactionDetailModal({ transaction: tx, onClose }) {
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
+  const [remarketing, setRemarketing] = useState(false); // loading wpp link
+
+  const showRemarketing = REMARKET_STATUSES.includes(tx.status) && tx.phone;
+
+  async function handleOpenWpp() {
+    setRemarketing(true);
+    try {
+      const res = await api.get(`/admin/remarket_wpp/${tx.id}`);
+      const url = res.data?.wpp_url;
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // silently ignore
+    } finally {
+      setRemarketing(false);
+    }
+  }
 
   async function handleSend() {
     setSending(true);
@@ -96,7 +114,7 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 px-6 pb-5">
+        <div className="flex flex-wrap gap-2 px-6 pb-5">
           <button
             type="button"
             onClick={onClose}
@@ -104,6 +122,18 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
           >
             Fechar
           </button>
+          {showRemarketing && (
+            <button
+              type="button"
+              onClick={handleOpenWpp}
+              disabled={remarketing}
+              title={`Abrir WhatsApp Web com mensagem de recuperação (${tx.status})`}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
+            >
+              {remarketing ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+              {remarketing ? 'Gerando…' : 'WA Recovery'}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleSend}
