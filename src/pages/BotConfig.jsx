@@ -169,9 +169,12 @@ export default function BotConfig() {
 
             {diagResults && (
               <div className="bg-gray-900/50 rounded-lg border border-gray-700 px-4">
-                {diagResults.results.map((step, i) => (
+                {(diagResults.results ?? []).map((step, i) => (
                   <DiagStep key={i} step={step} />
                 ))}
+                {!diagResults.results?.length && (
+                  <p className="py-3 text-center text-xs text-gray-500">Sem resultados de diagnóstico.</p>
+                )}
                 {diagResults.ok && (
                   <div className="py-3 text-center text-sm text-green-400 font-medium">
                     ✓ Todos os testes passaram com sucesso

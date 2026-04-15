@@ -12,12 +12,12 @@ const PER_PAGE = 20;
 const ALL_STATUSES = ['pending', 'sent', 'delivered', 'failed', 'bounced', 'dropped'];
 
 const STATUS_VARIANT = {
-  pending:   'warning',
-  sent:      'info',
-  delivered: 'success',
-  failed:    'danger',
-  bounced:   'danger',
-  dropped:   'danger',
+  pending:   'yellow',
+  sent:      'blue',
+  delivered: 'green',
+  failed:    'red',
+  bounced:   'red',
+  dropped:   'red',
 };
 
 const EMPTY_FILTERS = { status: '' };
@@ -39,6 +39,8 @@ export default function EmailQueue() {
     try {
       const params = new URLSearchParams({ page, per_page: PER_PAGE });
       if (applied.status) params.set('status', applied.status);
+      params.set('sort_column', sortColumn);
+      params.set('sort_direction', sortDirection);
       const res = await api.get(`/admin/email_queue?${params}`);
       setData({ items: res.data.items || [], total: res.data.total || 0 });
     } catch {
@@ -46,7 +48,7 @@ export default function EmailQueue() {
     } finally {
       setLoading(false);
     }
-  }, [page, applied]);
+  }, [page, applied, sortColumn, sortDirection]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function Pagination({ page, perPage, total, onChange }) {
+  if (!perPage) return null;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   if (totalPages <= 1) return null;

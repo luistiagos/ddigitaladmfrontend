@@ -81,7 +81,7 @@ export default function Coupons() {
     try {
       const payload = {
         name,
-        discount: discountNum,
+        discount: discountNum / 100,
         product_id: form.product_id ? parseInt(form.product_id, 10) : 0,
         valid_date: form.valid_date || null,
       };

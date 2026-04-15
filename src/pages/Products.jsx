@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -12,8 +12,16 @@ export default function Products() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Debounce search input — wait 400ms after last keystroke
+  const debounceRef = useRef(null);
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [search]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -33,7 +41,7 @@ export default function Products() {
     setError('');
     try {
       const params = { page, per_page: PER_PAGE };
-      if (search.trim()) params.title = search.trim();
+      if (debouncedSearch.trim()) params.title = debouncedSearch.trim();
       const res = await api.get('/admin/items', { params });
       setProducts(res.data.items || []);
       setTotal(res.data.total || 0);
@@ -42,7 +50,7 @@ export default function Products() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, debouncedSearch]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -182,23 +190,7 @@ export default function Products() {
             {products.map(p => (
               <div key={p.id} className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden flex flex-col">
                 {/* Image */}
-                <div className="h-36 bg-gray-700 flex items-center justify-center overflow-hidden">
-                  {p.image ? (
-                    <img
-                      src={p.image}
-                      alt={p.title}
-                      className="w-full h-full object-cover"
-                      onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                    />
-                  ) : null}
-                  <div
-                    className="w-full h-full items-center justify-center flex-col gap-1"
-                    style={{ display: p.image ? 'none' : 'flex' }}
-                  >
-                    <ImageOff className="h-8 w-8 text-gray-600" />
-                    <span className="text-xs text-gray-600">Sem imagem</span>
-                  </div>
-                </div>
+                <ProductImage image={p.image} title={p.title} />
 
                 {/* Info */}
                 <div className="p-4 flex flex-col gap-2 flex-1">
@@ -392,6 +384,27 @@ export default function Products() {
           onConfirm={handleDelete}
           onCancel={() => setToDelete(null)}
         />
+      )}
+    </div>
+  );
+}
+
+function ProductImage({ image, title }) {
+  const [error, setError] = useState(false);
+  return (
+    <div className="h-36 bg-gray-700 flex items-center justify-center overflow-hidden">
+      {image && !error ? (
+        <img
+          src={image}
+          alt={title}
+          className="w-full h-full object-cover"
+          onError={() => setError(true)}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center flex-col gap-1">
+          <ImageOff className="h-8 w-8 text-gray-600" />
+          <span className="text-xs text-gray-600">Sem imagem</span>
+        </div>
       )}
     </div>
   );

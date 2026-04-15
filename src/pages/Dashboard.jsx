@@ -106,7 +106,8 @@ export default function Dashboard() {
   const mpFees = stats?.mp_fees_total ?? null;
   const totalExpenses = (fbSpend ?? 0);
   const hasExpenses = metaOk;
-  const lucroBruto = hasExpenses ? approvedTotal - totalExpenses : null;
+  const fbReady = metaOk && !loadingFb && !fbError;
+  const lucroBruto = hasExpenses && fbReady && stats !== null ? approvedTotal - totalExpenses : null;
 
   return (
     <div>
@@ -234,8 +235,8 @@ export default function Dashboard() {
             color="cyan"
           />
 
-          {/* Total Despesas — só quando todos os providers carregaram */}
-          {hasExpenses && (!metaOk || !loadingFb || fbError) && !loadingStats && (
+          {/* Total Despesas — só quando todos os providers carregaram com sucesso */}
+          {hasExpenses && fbReady && !loadingStats && (
             <KpiCard
               icon={<Receipt className="h-4 w-4" />}
               label="Total Despesas"
@@ -244,8 +245,8 @@ export default function Dashboard() {
             />
           )}
 
-          {/* Lucro Bruto — só quando todos os providers carregaram */}
-          {lucroBruto !== null && (!metaOk || !loadingFb || fbError) && !loadingStats && (
+          {/* Lucro Bruto — só quando todos os providers carregaram com sucesso */}
+          {lucroBruto !== null && !loadingStats && (
             <KpiCard
               icon={<DollarSign className="h-4 w-4" />}
               label="Lucro Bruto"

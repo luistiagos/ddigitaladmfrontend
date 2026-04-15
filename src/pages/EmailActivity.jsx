@@ -15,16 +15,16 @@ const ALL_STATUSES = [
 ];
 
 const STATUS_VARIANT = {
-  delivered:     'success',
-  not_delivered: 'danger',
-  open:          'info',
-  click:         'info',
-  processed:     'neutral',
-  deferred:      'warning',
-  bounce:        'danger',
-  dropped:       'danger',
-  spamreport:    'danger',
-  unsubscribe:   'warning',
+  delivered:     'green',
+  not_delivered: 'red',
+  open:          'blue',
+  click:         'blue',
+  processed:     'gray',
+  deferred:      'yellow',
+  bounce:        'red',
+  dropped:       'red',
+  spamreport:    'red',
+  unsubscribe:   'yellow',
 };
 
 const EMPTY_FILTERS = {

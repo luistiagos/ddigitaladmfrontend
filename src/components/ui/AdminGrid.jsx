@@ -96,7 +96,9 @@ export default function AdminGrid({
     const a = document.createElement('a');
     a.href = url;
     a.download = `${safeFilename}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     // Defer revoke so the browser has time to start the download
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
@@ -131,7 +133,7 @@ export default function AdminGrid({
   // value column            → formatted sum
   // after the value column  → empty filler
   const footerBefore = hasValueSummary ? (valueColIdx > 0 ? valueColIdx : 1) : colCount;
-  const footerAfter  = hasValueSummary ? colCount - valueColIdx - 1 : 0;
+  const footerAfter  = hasValueSummary ? colCount - footerBefore - 1 : 0;
 
   return (
     <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">

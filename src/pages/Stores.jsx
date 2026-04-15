@@ -63,6 +63,8 @@ function StorePackagesModal({ store, onClose }) {
       });
       await fetchSp();
       setEditingId(null);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao salvar alterações.');
     } finally {
       setSaving(false);
     }
@@ -435,23 +437,7 @@ export default function Stores() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {sorted.map(s => (
             <div key={s.id} className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden flex flex-col">
-              <div className="h-36 bg-gray-700 flex items-center justify-center overflow-hidden">
-                {s.url_thumb ? (
-                  <img
-                    src={s.url_thumb}
-                    alt={s.name}
-                    className="w-full h-full object-cover"
-                    onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                  />
-                ) : null}
-                <div
-                  className="w-full h-full items-center justify-center flex-col gap-1"
-                  style={{ display: s.url_thumb ? 'none' : 'flex' }}
-                >
-                  <ImageOff className="h-8 w-8 text-gray-600" />
-                  <span className="text-xs text-gray-600">Sem imagem</span>
-                </div>
-              </div>
+              <StoreImage url={s.url_thumb} name={s.name} />
 
               <div className="p-4 flex flex-col gap-2 flex-1">
                 <div>
@@ -599,6 +585,27 @@ export default function Stores() {
           onConfirm={handleDelete}
           onCancel={() => setToDelete(null)}
         />
+      )}
+    </div>
+  );
+}
+
+function StoreImage({ url, name }) {
+  const [error, setError] = useState(false);
+  return (
+    <div className="h-36 bg-gray-700 flex items-center justify-center overflow-hidden">
+      {url && !error ? (
+        <img
+          src={url}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={() => setError(true)}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center flex-col gap-1">
+          <ImageOff className="h-8 w-8 text-gray-600" />
+          <span className="text-xs text-gray-600">Sem imagem</span>
+        </div>
       )}
     </div>
   );
