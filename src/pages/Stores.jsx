@@ -410,14 +410,14 @@ export default function Stores() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-white">Stores</h1>
+          <h1 className="text-xl font-semibold text-white">Lojas</h1>
           <p className="text-sm text-gray-400 mt-1">Gerenciamento de lojas ({stores.length})</p>
         </div>
         <button
           onClick={openCreate}
           className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-lg transition-colors"
         >
-          <Plus className="h-4 w-4" /> Nova Store
+          <Plus className="h-4 w-4" /> Nova Loja
         </button>
       </div>
 

@@ -34,9 +34,9 @@ const NAV_ITEMS = [
   { to: '/configuracoes', label: 'Configurações', icon: Settings2 },
   { to: '/bot', label: 'Bot WhatsApp', icon: Bot },
   { to: '/cupons', label: 'Cupons', icon: Tag },
-  { to: '/stores', label: 'Stores', icon: Store },
+  { to: '/stores', label: 'Lojas', icon: Store },
   { to: '/produtos', label: 'Produtos', icon: Package },
-  { to: '/email-activity', label: 'Email Activity', icon: MailSearch },
+  { to: '/email-activity', label: 'Atividade de Email', icon: MailSearch },
   { to: '/email-queue', label: 'Fila de Emails', icon: MailWarning },
   { to: '/erros', label: 'Log de Erros', icon: TriangleAlert },
 ];

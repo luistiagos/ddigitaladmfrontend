@@ -218,7 +218,7 @@ export default function EmailQueue() {
         sortDirection={sortDirection}
         onSort={handleSort}
         totalLabel="registro"
-        title="EmailQueue"
+        title="Fila de Emails"
       />
     </div>
   );

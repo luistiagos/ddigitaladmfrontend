@@ -203,7 +203,7 @@ export default function EmailActivity() {
         sortDirection={sortDirection}
         onSort={handleSort}
         totalLabel="registro"
-        title="EmailActivity"
+        title="Atividade de E-mails"
       />
     </div>
   );
