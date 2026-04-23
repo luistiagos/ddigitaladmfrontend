@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight, Search, Copy } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { formatCurrency } from '@/utils/format';
@@ -33,6 +33,7 @@ export default function Products() {
 
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [copying, setCopying] = useState(null);
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
@@ -135,6 +136,29 @@ export default function Products() {
     }
   }
 
+  async function handleCopy(p) {
+    setCopying(p.id);
+    try {
+      const payload = {
+        title: `Cópia de ${p.title}`,
+        price: p.price,
+        image: p.image || null,
+        purchaselink: p.purchaselink || null,
+        deliverlink: p.deliverlink || null,
+        add_pkg: p.add_pkg || null,
+        prd_content: p.prd_content || null,
+      };
+      const res = await api.post('/admin/items', payload);
+      const newProduct = { ...p, id: res.data.id, title: payload.title };
+      await fetchProducts();
+      openEdit(newProduct);
+    } catch {
+      alert('Erro ao copiar produto.');
+    } finally {
+      setCopying(null);
+    }
+  }
+
   const inputCls = 'w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500';
 
   return (
@@ -219,6 +243,16 @@ export default function Products() {
                     className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
                   >
                     <Pencil className="h-3.5 w-3.5" /> Editar
+                  </button>
+                  <button
+                    onClick={() => handleCopy(p)}
+                    disabled={copying === p.id}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors disabled:opacity-60"
+                  >
+                    {copying === p.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Copy className="h-3.5 w-3.5" />
+                    } Copiar
                   </button>
                   <button
                     onClick={() => setToDelete(p)}
