@@ -7,7 +7,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 // StorePackagesModal  manage products / order-bumps linked to a store
 // ---------------------------------------------------------------------------
 
-const EMPTY_ADD = { package_id: '', principal: '0', active: true, price: '', relprice: '' };
+const EMPTY_ADD = { package_id: '', principal: '0', active: true, price: '', relprice: '', description: '' };
 
 function StorePackagesModal({ store, onClose }) {
   const [spItems, setSpItems] = useState([]);
@@ -67,6 +67,7 @@ function StorePackagesModal({ store, onClose }) {
       active: sp.active !== 0,
       price: sp.price ?? '',
       relprice: sp.relprice ?? '',
+      description: sp.description ?? '',
     });
   }
 
@@ -78,6 +79,7 @@ function StorePackagesModal({ store, onClose }) {
         active: editForm.active,
         price: editForm.price || null,
         relprice: editForm.relprice || null,
+        description: editForm.description?.trim() || null,
       });
       await fetchSp();
       setEditingId(null);
@@ -112,6 +114,7 @@ function StorePackagesModal({ store, onClose }) {
         active: addForm.active,
         price: addForm.price || null,
         relprice: addForm.relprice || null,
+        description: addForm.description?.trim() || null,
       });
       await fetchSp();
       setAddForm(EMPTY_ADD);
@@ -193,6 +196,16 @@ function StorePackagesModal({ store, onClose }) {
                         onChange={e => setEditForm(f => ({ ...f, relprice: e.target.value }))}
                         placeholder="Opcional" className={inputCls} />
                     </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-400 mb-1">Descrição</label>
+                      <textarea
+                        rows={3}
+                        value={editForm.description || ''}
+                        onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                        placeholder="Descrição exibida no checkout para este bump"
+                        className={inputCls}
+                      />
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => handleSaveEdit(sp)} disabled={saving}
@@ -225,6 +238,9 @@ function StorePackagesModal({ store, onClose }) {
                         : `R$ ${Number(sp.package_price ?? 0).toFixed(2)} (padrão)`}
                       {sp.relprice != null && `  de R$ ${Number(sp.relprice).toFixed(2)}`}
                     </div>
+                    {sp.description && (
+                      <p className="text-xs text-gray-400 mt-1 line-clamp-2">{sp.description}</p>
+                    )}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <button onClick={() => openEdit(sp)}
@@ -281,6 +297,16 @@ function StorePackagesModal({ store, onClose }) {
                   <input type="number" step="0.01" min="0" value={addForm.relprice}
                     onChange={e => setAddForm(f => ({ ...f, relprice: e.target.value }))}
                     placeholder="Opcional" className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-400 mb-1">Descrição</label>
+                  <textarea
+                    rows={3}
+                    value={addForm.description}
+                    onChange={e => setAddForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Descrição exibida no checkout para este bump"
+                    className={inputCls}
+                  />
                 </div>
               </div>
               {addError && <p className="text-sm text-red-400">{addError}</p>}
