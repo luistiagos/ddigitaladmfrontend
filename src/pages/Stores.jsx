@@ -24,6 +24,24 @@ function StorePackagesModal({ store, onClose }) {
   const [savingAdd, setSavingAdd] = useState(false);
   const [addError, setAddError] = useState('');
 
+  const fetchAllPackages = useCallback(async () => {
+    const perPage = 100;
+    let page = 1;
+    let total = 0;
+    let items = [];
+
+    do {
+      const res = await api.get('/admin/items', { params: { per_page: perPage, page } });
+      const batch = res.data.items || [];
+      total = Number(res.data.total || 0);
+      items = items.concat(batch);
+      page += 1;
+      if (batch.length === 0) break;
+    } while (items.length < total);
+
+    return items;
+  }, []);
+
   const fetchSp = useCallback(async () => {
     const res = await api.get(`/admin/stores/${store.id}/packages`);
     setSpItems(res.data.items || []);
@@ -33,14 +51,14 @@ function StorePackagesModal({ store, onClose }) {
     setLoading(true);
     Promise.all([
       api.get(`/admin/stores/${store.id}/packages`),
-      api.get('/admin/items', { params: { per_page: 200, page: 1 } }),
+      fetchAllPackages(),
     ])
       .then(([spRes, pkgRes]) => {
         setSpItems(spRes.data.items || []);
-        setAllPkgs(pkgRes.data.items || []);
+        setAllPkgs(pkgRes || []);
       })
       .finally(() => setLoading(false));
-  }, [store.id]);
+  }, [store.id, fetchAllPackages]);
 
   function openEdit(sp) {
     setEditingId(sp.id);
