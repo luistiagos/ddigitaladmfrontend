@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -74,11 +74,14 @@ function StorePackagesModal({ store, onClose }) {
   async function handleSaveEdit(sp) {
     setSaving(true);
     try {
+      const parsedPrice = editForm.price ? Number(String(editForm.price).replace(',', '.')) : null;
+      const parsedRelPrice = editForm.relprice ? Number(String(editForm.relprice).replace(',', '.')) : null;
+
       await api.put(`/admin/stores/packages/${sp.id}`, {
         principal: editForm.principal === '1',
         active: editForm.active,
-        price: editForm.price || null,
-        relprice: editForm.relprice || null,
+        price: isNaN(parsedPrice) ? null : parsedPrice,
+        relprice: isNaN(parsedRelPrice) ? null : parsedRelPrice,
         description: editForm.description?.trim() || null,
       });
       await fetchSp();
@@ -108,12 +111,15 @@ function StorePackagesModal({ store, onClose }) {
     if (!addForm.package_id) { setAddError('Selecione um produto.'); return; }
     setSavingAdd(true);
     try {
+      const parsedPrice = addForm.price ? Number(String(addForm.price).replace(',', '.')) : null;
+      const parsedRelPrice = addForm.relprice ? Number(String(addForm.relprice).replace(',', '.')) : null;
+
       await api.post(`/admin/stores/${store.id}/packages`, {
         package_id: Number(addForm.package_id),
         principal: addForm.principal === '1',
         active: addForm.active,
-        price: addForm.price || null,
-        relprice: addForm.relprice || null,
+        price: isNaN(parsedPrice) ? null : parsedPrice,
+        relprice: isNaN(parsedRelPrice) ? null : parsedRelPrice,
         description: addForm.description?.trim() || null,
       });
       await fetchSp();
@@ -186,13 +192,13 @@ function StorePackagesModal({ store, onClose }) {
                     </div>
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">Preço (override)</label>
-                      <input type="number" step="0.01" min="0" value={editForm.price}
+                      <input type="text" inputMode="decimal" value={editForm.price}
                         onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
                         placeholder="Padrão do produto" className={inputCls} />
                     </div>
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">Preço de (riscado)</label>
-                      <input type="number" step="0.01" min="0" value={editForm.relprice}
+                      <input type="text" inputMode="decimal" value={editForm.relprice}
                         onChange={e => setEditForm(f => ({ ...f, relprice: e.target.value }))}
                         placeholder="Opcional" className={inputCls} />
                     </div>
@@ -288,13 +294,13 @@ function StorePackagesModal({ store, onClose }) {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Preço (override)</label>
-                  <input type="number" step="0.01" min="0" value={addForm.price}
+                  <input type="text" inputMode="decimal" value={addForm.price}
                     onChange={e => setAddForm(f => ({ ...f, price: e.target.value }))}
                     placeholder="Padrão do produto" className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Preço de (riscado)</label>
-                  <input type="number" step="0.01" min="0" value={addForm.relprice}
+                  <input type="text" inputMode="decimal" value={addForm.relprice}
                     onChange={e => setAddForm(f => ({ ...f, relprice: e.target.value }))}
                     placeholder="Opcional" className={inputCls} />
                 </div>
