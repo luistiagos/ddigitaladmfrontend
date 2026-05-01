@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Eye } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import useAdminGrid from '@/utils/useAdminGrid';
 import { formatDateTime, todayISO } from '@/utils/format';
+import LeadDetailModal from '@/modals/LeadDetailModal';
 
 const PER_PAGE = 20;
 const getEmptyFilters = () => ({
@@ -25,6 +26,7 @@ export default function Leads() {
   const [data, setData] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedLead, setSelectedLead] = useState(null);
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'dttime', defaultDir: 'desc' });
 
@@ -87,10 +89,25 @@ export default function Leads() {
       render: r => <Badge variant={statusVariant(r.status)}>{r.status || '—'}</Badge>,
       csvValue: r => r.status ?? '',
     },
+    {
+      key: 'actions', label: 'Ações', sortable: false,
+      render: r => (
+        <button
+          onClick={() => setSelectedLead(r)}
+          title="Ver detalhes e enviar WA Recovery"
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs transition-colors"
+        >
+          <Eye className="h-3.5 w-3.5" /> Ver
+        </button>
+      ),
+    },
   ];
 
   return (
     <div>
+      {selectedLead && (
+        <LeadDetailModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
+      )}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Leads</h1>
         <p className="text-sm text-gray-400 mt-1">Visitantes e potenciais clientes</p>
