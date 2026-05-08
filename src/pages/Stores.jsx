@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package, GripVertical } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
@@ -7,7 +7,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 // StorePackagesModal  manage products / order-bumps linked to a store
 // ---------------------------------------------------------------------------
 
-const EMPTY_ADD = { package_id: '', principal: '0', active: true, price: '', relprice: '', description: '' };
+const EMPTY_ADD = { package_id: '', principal: '0', active: true, price: '', relprice: '', description: '', members_only: false };
 
 function StorePackagesModal({ store, onClose }) {
   const [spItems, setSpItems] = useState([]);
@@ -23,6 +23,12 @@ function StorePackagesModal({ store, onClose }) {
   const [addForm, setAddForm] = useState(EMPTY_ADD);
   const [savingAdd, setSavingAdd] = useState(false);
   const [addError, setAddError] = useState('');
+
+  // Drag-and-drop state
+  const dragIndexRef = useRef(null);     // index being dragged
+  const [dragOver, setDragOver] = useState(null); // index being hovered
+  const reorderTimerRef = useRef(null);
+  const [reordering, setReordering] = useState(false);
 
   const fetchAllPackages = useCallback(async () => {
     const perPage = 100;
@@ -68,6 +74,7 @@ function StorePackagesModal({ store, onClose }) {
       price: sp.price ?? '',
       relprice: sp.relprice ?? '',
       description: sp.description ?? '',
+      members_only: !!sp.members_only,
     });
   }
 
@@ -83,6 +90,7 @@ function StorePackagesModal({ store, onClose }) {
         price: isNaN(parsedPrice) ? null : parsedPrice,
         relprice: isNaN(parsedRelPrice) ? null : parsedRelPrice,
         description: editForm.description?.trim() || null,
+        members_only: editForm.members_only,
       });
       await fetchSp();
       setEditingId(null);
@@ -121,6 +129,7 @@ function StorePackagesModal({ store, onClose }) {
         price: isNaN(parsedPrice) ? null : parsedPrice,
         relprice: isNaN(parsedRelPrice) ? null : parsedRelPrice,
         description: addForm.description?.trim() || null,
+        members_only: addForm.members_only,
       });
       await fetchSp();
       setAddForm(EMPTY_ADD);
@@ -130,6 +139,63 @@ function StorePackagesModal({ store, onClose }) {
     } finally {
       setSavingAdd(false);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Drag-and-drop handlers  (only non-principal items are draggable)
+  // ---------------------------------------------------------------------------
+
+  function handleDragStart(e, index) {
+    dragIndexRef.current = index;
+    e.dataTransfer.effectAllowed = 'move';
+    // Semi-transparent ghost
+    e.dataTransfer.setDragImage(e.currentTarget, 20, 20);
+  }
+
+  function handleDragOver(e, index) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (index !== dragIndexRef.current) {
+      setDragOver(index);
+    }
+  }
+
+  function handleDrop(e, dropIndex) {
+    e.preventDefault();
+    const dragIndex = dragIndexRef.current;
+    if (dragIndex === null || dragIndex === dropIndex) {
+      setDragOver(null);
+      return;
+    }
+
+    // Reorder locally (optimistic)
+    const newItems = [...spItems];
+    const [moved] = newItems.splice(dragIndex, 1);
+    newItems.splice(dropIndex, 0, moved);
+    setSpItems(newItems);
+    dragIndexRef.current = null;
+    setDragOver(null);
+
+    // Persist to backend (debounced to avoid rapid calls during multi-step drag)
+    clearTimeout(reorderTimerRef.current);
+    reorderTimerRef.current = setTimeout(async () => {
+      setReordering(true);
+      try {
+        await api.post(`/admin/stores/${store.id}/packages/reorder`, {
+          ordered_ids: newItems.map(i => i.id),
+        });
+      } catch {
+        // On failure, re-fetch to restore server order
+        await fetchSp();
+      } finally {
+        setReordering(false);
+      }
+    }, 400);
+  }
+
+  function handleDragEnd() {
+    dragIndexRef.current = null;
+    setDragOver(null);
   }
 
   const linkedPkgIds = new Set(spItems.map(i => i.package_id));
@@ -146,6 +212,7 @@ function StorePackagesModal({ store, onClose }) {
           <h2 className="font-semibold text-white flex items-center gap-2">
             <Package className="h-4 w-4 text-violet-400" />
             Produtos — {store.name}
+            {reordering && <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400 ml-1" />}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <X className="h-5 w-5" />
@@ -164,8 +231,27 @@ function StorePackagesModal({ store, onClose }) {
             <p className="text-gray-500 text-sm text-center py-6">Nenhum produto vinculado ainda.</p>
           )}
 
-          {!loading && spItems.map(sp => (
-            <div key={sp.id} className="border border-gray-700 rounded-xl p-3 bg-gray-700/30">
+          {!loading && spItems.length > 1 && !showAdd && (
+            <p className="text-[11px] text-gray-500 text-center -mt-1 mb-1">
+              <GripVertical className="inline h-3 w-3 mr-0.5 -mt-0.5" />
+              Arraste pelo ícone para reordenar os order bumps
+            </p>
+          )}
+
+          {!loading && spItems.map((sp, index) => (
+            <div
+              key={sp.id}
+              draggable={!sp.principal && editingId !== sp.id}
+              onDragStart={!sp.principal ? (e) => handleDragStart(e, index) : undefined}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              className={`border rounded-xl p-3 transition-all ${
+                dragOver === index
+                  ? 'border-violet-500 bg-violet-500/10 scale-[1.01]'
+                  : 'border-gray-700 bg-gray-700/30'
+              }`}
+            >
               {editingId === sp.id ? (
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-3">
@@ -212,6 +298,28 @@ function StorePackagesModal({ store, onClose }) {
                         className={inputCls}
                       />
                     </div>
+                    <div className="col-span-2">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <div
+                          onClick={() => setEditForm(f => ({ ...f, members_only: !f.members_only }))}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                            editForm.members_only ? 'bg-violet-600' : 'bg-gray-600'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                            editForm.members_only ? 'translate-x-4' : 'translate-x-1'
+                          }`} />
+                        </div>
+                        <span className="text-xs text-gray-300">
+                          Somente Área de Membros
+                          <span className="block text-[10px] text-gray-500 leading-tight">
+                            {editForm.members_only
+                              ? 'Não aparece como order bump — apenas na área de membros'
+                              : 'Aparece na loja (order bump) e na área de membros'}
+                          </span>
+                        </span>
+                      </label>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => handleSaveEdit(sp)} disabled={saving}
@@ -225,7 +333,18 @@ function StorePackagesModal({ store, onClose }) {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  {/* Drag handle — only for non-principal items */}
+                  {!sp.principal ? (
+                    <div
+                      className="shrink-0 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 transition-colors px-0.5"
+                      title="Arraste para reordenar"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </div>
+                  ) : (
+                    <div className="w-5 shrink-0" /> {/* spacer to keep alignment */}
+                  )}
                   {sp.package_image
                     ? <img src={sp.package_image} alt="" className="h-10 w-10 rounded object-cover shrink-0" />
                     : <div className="h-10 w-10 rounded bg-gray-700 flex items-center justify-center shrink-0"><ImageOff className="h-4 w-4 text-gray-600" /></div>
@@ -237,6 +356,9 @@ function StorePackagesModal({ store, onClose }) {
                         {sp.principal ? 'Principal' : 'Order Bump'}
                       </span>
                       {!sp.active && <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-600 text-gray-400">Inativo</span>}
+                      {sp.members_only ? (
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300">Só Membros</span>
+                      ) : null}
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5">
                       {sp.price != null
@@ -313,6 +435,28 @@ function StorePackagesModal({ store, onClose }) {
                     placeholder="Descrição exibida no checkout para este bump"
                     className={inputCls}
                   />
+                </div>
+                <div className="col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <div
+                      onClick={() => setAddForm(f => ({ ...f, members_only: !f.members_only }))}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                        addForm.members_only ? 'bg-violet-600' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        addForm.members_only ? 'translate-x-4' : 'translate-x-1'
+                      }`} />
+                    </div>
+                    <span className="text-xs text-gray-300">
+                      Somente Área de Membros
+                      <span className="block text-[10px] text-gray-500 leading-tight">
+                        {addForm.members_only
+                          ? 'Não aparece como order bump — apenas na área de membros'
+                          : 'Aparece na loja (order bump) e na área de membros'}
+                      </span>
+                    </span>
+                  </label>
                 </div>
               </div>
               {addError && <p className="text-sm text-red-400">{addError}</p>}
