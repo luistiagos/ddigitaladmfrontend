@@ -343,7 +343,7 @@ function StorePackagesModal({ store, onClose }) {
                       <GripVertical className="h-4 w-4" />
                     </div>
                   ) : (
-                    <div className="w-5 shrink-0" /> {/* spacer to keep alignment */}
+                    <div className="w-5 shrink-0" />
                   )}
                   {sp.package_image
                     ? <img src={sp.package_image} alt="" className="h-10 w-10 rounded object-cover shrink-0" />
