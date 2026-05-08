@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall } from 'lucide-react';
+import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle } from 'lucide-react';
 import api from '@/services/api';
 
 function DiagStep({ step }) {
@@ -40,11 +40,46 @@ export default function BotConfig() {
   const [diagRunning, setDiagRunning] = useState(false);
   const [diagResults, setDiagResults] = useState(null);
 
+  const [webhookStatus, setWebhookStatus] = useState(null);
+  const [webhookChecking, setWebhookChecking] = useState(false);
+  const [webhookFixing, setWebhookFixing] = useState(false);
+
   useEffect(() => {
     api.get('/admin/wpp/bot_status')
       .then((res) => setBotEnabled(res.data.bot_enabled ?? true))
       .catch(() => {});
+    checkWebhook();
   }, []);
+
+  async function checkWebhook() {
+    setWebhookChecking(true);
+    try {
+      const res = await api.get('/admin/whatsapp/webhook');
+      setWebhookStatus(res.data);
+    } catch (err) {
+      console.error('Erro ao verificar webhook:', err);
+    } finally {
+      setWebhookChecking(false);
+    }
+  }
+
+  async function fixWebhook() {
+    if (!confirm('Deseja reconfigurar o webhook da Evolution API?')) return;
+    setWebhookFixing(true);
+    try {
+      const res = await api.post('/admin/whatsapp/webhook/fix');
+      if (res.data.ok) {
+        alert('Webhook reconfigurado com sucesso!');
+        await checkWebhook();
+      } else {
+        alert('Falha ao reconfigurar: ' + (res.data.error || 'Erro desconhecido'));
+      }
+    } catch (err) {
+      alert('Erro na requisição: ' + err.message);
+    } finally {
+      setWebhookFixing(false);
+    }
+  }
 
   async function toggleBot() {
     const newValue = !botEnabled;
@@ -184,6 +219,95 @@ export default function BotConfig() {
             )}
           </div>
         )}
+
+        {/* ── Status do Webhook ── */}
+        <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-1">
+                <Webhook className="h-4 w-4 text-cyan-400" />
+                Status da Conexão e Webhook
+              </h2>
+              <p className="text-xs text-gray-500">
+                Verifique se o WhatsApp está conectado e se o webhook está recebendo mensagens.
+              </p>
+            </div>
+            <button
+              onClick={checkWebhook}
+              disabled={webhookChecking}
+              className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition"
+              title="Atualizar status"
+            >
+              <RefreshCw className={`h-4 w-4 ${webhookChecking ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {!webhookStatus ? (
+            <div className="text-sm text-gray-400 flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando status...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+                  <div className="text-xs text-gray-500 mb-1">Evolution API</div>
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    {webhookStatus.evolution_online ? (
+                      <><span className="w-2 h-2 rounded-full bg-green-500"></span> Online</>
+                    ) : (
+                      <><span className="w-2 h-2 rounded-full bg-red-500"></span> Offline</>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+                  <div className="text-xs text-gray-500 mb-1">WhatsApp Instância</div>
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    {webhookStatus.wa_state === 'open' ? (
+                      <><span className="w-2 h-2 rounded-full bg-green-500"></span> Conectado</>
+                    ) : (
+                      <><span className="w-2 h-2 rounded-full bg-red-500"></span> {webhookStatus.wa_state || 'Desconectado'}</>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50 col-span-2 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Configuração do Webhook</div>
+                    <div className="text-sm font-medium flex items-center gap-1.5">
+                      {webhookStatus.webhook_ok ? (
+                        <><span className="w-2 h-2 rounded-full bg-green-500"></span> Correta</>
+                      ) : (
+                        <><span className="w-2 h-2 rounded-full bg-red-500"></span> Incorreta ou Ausente</>
+                      )}
+                    </div>
+                  </div>
+                  {!webhookStatus.webhook_ok && (
+                    <button
+                      onClick={fixWebhook}
+                      disabled={webhookFixing}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 text-xs font-medium transition"
+                    >
+                      {webhookFixing ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+                      Reconfigurar Webhook
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {webhookStatus.last_db_message && (
+                <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+                  <div className="text-xs text-gray-500 mb-1.5 flex justify-between">
+                    <span>Última mensagem processada</span>
+                    <span>{new Date(webhookStatus.last_db_message.dttime).toLocaleString()}</span>
+                  </div>
+                  <div className="text-sm text-gray-300 truncate">
+                    <span className="text-gray-500 mr-2">[{webhookStatus.last_db_message.role}]</span>
+                    {webhookStatus.last_db_message.msg_preview}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
