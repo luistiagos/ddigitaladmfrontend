@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   Send,
+  Link,
   Gamepad2,
   Settings2,
   Tag,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SendProductModal from '@/modals/SendProductModal';
+import SendMemberAreaLinkModal from '@/modals/SendMemberAreaLinkModal';
 
 const NAV_GROUPS = [
   {
@@ -124,6 +126,7 @@ export default function AdminLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [memberLinkModalOpen, setMemberLinkModalOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState(() => getInitialOpen(location.pathname));
 
   // Auto-expand the group that owns the current route
@@ -167,14 +170,21 @@ export default function AdminLayout() {
         </div>
       </div>
 
-      {/* Send Product button */}
-      <div className="px-3 pt-4">
+      {/* Quick action buttons */}
+      <div className="px-3 pt-4 space-y-2">
         <button
           onClick={() => { setSendModalOpen(true); closeSidebar(); }}
           className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"
         >
           <Send className="h-4 w-4" />
           Enviar Produto
+        </button>
+        <button
+          onClick={() => { setMemberLinkModalOpen(true); closeSidebar(); }}
+          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
+        >
+          <Link className="h-4 w-4" />
+          Link Área de Membros
         </button>
       </div>
 
@@ -284,6 +294,9 @@ export default function AdminLayout() {
 
       {/* Send Product Modal */}
       {sendModalOpen && <SendProductModal onClose={() => setSendModalOpen(false)} />}
+
+      {/* Member Area Link Modal */}
+      {memberLinkModalOpen && <SendMemberAreaLinkModal onClose={() => setMemberLinkModalOpen(false)} />}
     </div>
   );
 }
