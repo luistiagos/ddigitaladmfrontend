@@ -37,10 +37,7 @@ function getSessionKey(session) {
   return session?.lid || session?.main_phone || session?.phone_jid || '';
 }
 
-function downloadJson(payload, filename) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: 'application/json;charset=utf-8;',
-  });
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -51,9 +48,15 @@ function downloadJson(payload, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-function exportFilename(prefix) {
+function downloadJson(payload, filename) {
+  downloadBlob(new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json;charset=utf-8;',
+  }), filename);
+}
+
+function exportFilename(prefix, extension = 'json') {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  return `${prefix}_${stamp}.json`;
+  return `${prefix}_${stamp}.${extension}`;
 }
 
 export default function WhatsAppSessions() {
@@ -122,7 +125,7 @@ export default function WhatsAppSessions() {
   function buildExportParams() {
     const params = new URLSearchParams({
       anonymize: anonymizeExport ? '1' : '0',
-      max_sessions: '100',
+      batch_size: '200',
       message_limit: '5000',
       sort_column: sortColumn,
       sort_direction: sortDirection,
@@ -138,10 +141,12 @@ export default function WhatsAppSessions() {
     setExporting(true);
     setExportError('');
     try {
-      const res = await api.get(`/admin/wpp/sessions/export?${buildExportParams()}`);
-      downloadJson(res.data, exportFilename('whatsapp_sessoes'));
+      const res = await api.get(`/admin/wpp/sessions/export.zip?${buildExportParams()}`, {
+        responseType: 'blob',
+      });
+      downloadBlob(res.data, exportFilename('whatsapp_sessoes', 'zip'));
     } catch (err) {
-      setExportError(err.response?.data?.error || 'Erro ao exportar JSON.');
+      setExportError(err.response?.data?.error || 'Erro ao exportar ZIP.');
     } finally {
       setExporting(false);
     }
@@ -305,7 +310,7 @@ export default function WhatsAppSessions() {
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors disabled:opacity-60"
           >
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            {exporting ? 'Exportando...' : 'Exportar JSON'}
+            {exporting ? 'Exportando...' : 'Exportar ZIP'}
           </button>
         </div>
         {exportError && <p className="text-sm text-red-400 mt-3">{exportError}</p>}
