@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, History, UserCog, Loader2, MessageCircle } from 'lucide-react';
+import { Search, X, History, UserCog, Loader2, MessageCircle, Download } from 'lucide-react';
 import api from '@/services/api';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { PhoneCell } from '@/components/ui/ContactCell';
@@ -37,6 +37,25 @@ function getSessionKey(session) {
   return session?.lid || session?.main_phone || session?.phone_jid || '';
 }
 
+function downloadJson(payload, filename) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+function exportFilename(prefix) {
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  return `${prefix}_${stamp}.json`;
+}
+
 export default function WhatsAppSessions() {
   const [agents, setAgents] = useState(FALLBACK_AGENTS);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -44,6 +63,9 @@ export default function WhatsAppSessions() {
   const [data, setData] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [anonymizeExport, setAnonymizeExport] = useState(true);
   const [historySession, setHistorySession] = useState(null);
   const [agentSession, setAgentSession] = useState(null);
 
@@ -95,6 +117,34 @@ export default function WhatsAppSessions() {
     setFilters(EMPTY_FILTERS);
     setApplied(EMPTY_FILTERS);
     setPage(1);
+  }
+
+  function buildExportParams() {
+    const params = new URLSearchParams({
+      anonymize: anonymizeExport ? '1' : '0',
+      max_sessions: '100',
+      message_limit: '5000',
+      sort_column: sortColumn,
+      sort_direction: sortDirection,
+    });
+    if (filters.lid) params.set('lid', filters.lid);
+    if (filters.phone) params.set('phone', filters.phone.replace(/\D/g, ''));
+    if (filters.start_datetime) params.set('start_datetime', filters.start_datetime);
+    if (filters.end_datetime) params.set('end_datetime', filters.end_datetime);
+    return params;
+  }
+
+  async function exportCurrentSessions() {
+    setExporting(true);
+    setExportError('');
+    try {
+      const res = await api.get(`/admin/wpp/sessions/export?${buildExportParams()}`);
+      downloadJson(res.data, exportFilename('whatsapp_sessoes'));
+    } catch (err) {
+      setExportError(err.response?.data?.error || 'Erro ao exportar JSON.');
+    } finally {
+      setExporting(false);
+    }
   }
 
   function handleAgentSaved(lid, currentAgent) {
@@ -225,7 +275,7 @@ export default function WhatsAppSessions() {
             />
           </Field>
         </div>
-        <div className="flex gap-2 mt-3">
+        <div className="flex flex-wrap items-center gap-2 mt-3">
           <button
             type="submit"
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-lg transition-colors"
@@ -239,7 +289,26 @@ export default function WhatsAppSessions() {
           >
             <X className="h-4 w-4" /> Limpar
           </button>
+          <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-900/60 border border-gray-700 text-xs text-gray-400">
+            <input
+              type="checkbox"
+              checked={anonymizeExport}
+              onChange={(e) => setAnonymizeExport(e.target.checked)}
+              className="h-4 w-4 accent-violet-500"
+            />
+            Anonimizar JSON
+          </label>
+          <button
+            type="button"
+            onClick={exportCurrentSessions}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors disabled:opacity-60"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {exporting ? 'Exportando...' : 'Exportar JSON'}
+          </button>
         </div>
+        {exportError && <p className="text-sm text-red-400 mt-3">{exportError}</p>}
       </form>
 
       <AdminGrid
@@ -262,6 +331,7 @@ export default function WhatsAppSessions() {
         <HistoryModal
           session={historySession}
           agents={agents}
+          anonymizeExport={anonymizeExport}
           onClose={() => setHistorySession(null)}
         />
       )}
@@ -356,12 +426,14 @@ function AgentModal({ session, agents, onClose, onSaved }) {
   );
 }
 
-function HistoryModal({ session, agents, onClose }) {
+function HistoryModal({ session, agents, anonymizeExport, onClose }) {
   const lid = getSessionKey(session);
   const [messages, setMessages] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -382,6 +454,23 @@ function HistoryModal({ session, agents, onClose }) {
     return () => { alive = false; };
   }, [lid]);
 
+  async function exportSession() {
+    setExporting(true);
+    setExportError('');
+    try {
+      const params = new URLSearchParams({
+        anonymize: anonymizeExport ? '1' : '0',
+        message_limit: '5000',
+      });
+      const res = await api.get(`/admin/wpp/sessions/${encodeURIComponent(lid)}/export?${params}`);
+      downloadJson(res.data, exportFilename('whatsapp_conversa'));
+    } catch (err) {
+      setExportError(err.response?.data?.error || 'Erro ao exportar conversa.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
       <div className="w-full max-w-3xl max-h-[90vh] bg-gray-800 rounded-xl shadow-2xl border border-gray-700 flex flex-col">
@@ -397,15 +486,33 @@ function HistoryModal({ session, agents, onClose }) {
               <span>{getAgentLabel(agents, session.current_agent)}</span>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
-            title="Fechar"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={exportSession}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs transition-colors disabled:opacity-60"
+              title="Exportar conversa em JSON"
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              JSON
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+              title="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
+
+        {exportError && (
+          <div className="px-5 py-2 border-b border-gray-700 text-sm text-red-400">
+            {exportError}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-5 py-4 bg-gray-900/40">
           {loading && (
