@@ -23,6 +23,8 @@ import {
   MailWarning,
   TriangleAlert,
   ChevronDown,
+  Send as SendIcon,
+  Activity,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SendProductModal from '@/modals/SendProductModal';
@@ -60,6 +62,14 @@ const NAV_GROUPS = [
     ],
   },
   {
+    key: 'remarketing',
+    label: 'Remarketing',
+    items: [
+      { to: '/remarketing/campanhas', label: 'Campanhas', icon: SendIcon },
+      { to: '/remarketing/workflows', label: 'Workflows', icon: Activity },
+    ],
+  },
+  {
     key: 'sistema',
     label: 'Sistema',
     items: [
@@ -75,7 +85,7 @@ function getInitialOpen(pathname) {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { /* ignore */ }
   // Default: comercial open, others closed — unless something was already saved
-  const defaults = { comercial: true, catalogo: false, canais: false, sistema: false };
+  const defaults = { comercial: true, catalogo: false, canais: false, remarketing: false, sistema: false };
   return { ...defaults, ...saved };
 }
 

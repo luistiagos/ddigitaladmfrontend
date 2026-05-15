@@ -19,6 +19,8 @@ import WhatsAppSessions from '@/pages/WhatsAppSessions';
 import EmailActivity from '@/pages/EmailActivity';
 import EmailQueue from '@/pages/EmailQueue';
 import ErrorLog from '@/pages/ErrorLog';
+import RemarketingCampaigns from '@/pages/RemarketingCampaigns';
+import RemarketingWorkflows from '@/pages/RemarketingWorkflows';
 
 export default function App() {
   return (
@@ -49,6 +51,8 @@ export default function App() {
             <Route path="whatsapp-sessoes" element={<WhatsAppSessions />} />
             <Route path="email-activity" element={<EmailActivity />} />
             <Route path="email-queue" element={<EmailQueue />} />
+            <Route path="remarketing/campanhas" element={<RemarketingCampaigns />} />
+            <Route path="remarketing/workflows" element={<RemarketingWorkflows />} />
             <Route path="erros" element={<ErrorLog />} />
           </Route>
 
