@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package, GripVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package, GripVertical, Copy } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
@@ -513,6 +513,7 @@ export default function Stores() {
 
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [copying, setCopying] = useState(null);
 
   const [pkgStore, setPkgStore] = useState(null);
 
@@ -596,6 +597,26 @@ export default function Stores() {
     }
   }
 
+  async function handleCopy(s) {
+    setCopying(s.id);
+    try {
+      const payload = {
+        name: `Cópia de ${s.name}`,
+        url_thumb: s.url_thumb || null,
+        url_checkout: s.url_checkout || null,
+        url_page: s.url_page || null,
+      };
+      const res = await api.post(`/admin/stores/${s.id}/copy`, payload);
+      const newStore = { ...payload, id: res.data.id };
+      await fetchStores();
+      openEdit(newStore);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao copiar store.');
+    } finally {
+      setCopying(null);
+    }
+  }
+
   const sorted = [...stores].sort((a, b) =>
     String(a.name ?? '').toLowerCase().localeCompare(String(b.name ?? '').toLowerCase())
   );
@@ -660,6 +681,16 @@ export default function Stores() {
                     className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
                   >
                     <Pencil className="h-3.5 w-3.5" /> Editar
+                  </button>
+                  <button
+                    onClick={() => handleCopy(s)}
+                    disabled={copying === s.id}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors disabled:opacity-60"
+                  >
+                    {copying === s.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Copy className="h-3.5 w-3.5" />
+                    } Copiar
                   </button>
                   <button
                     onClick={() => setToDelete(s)}
