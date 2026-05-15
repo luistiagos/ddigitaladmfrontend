@@ -11,6 +11,8 @@ import {
   GripVertical,
   Settings2,
   ChevronRight,
+  Copy,
+  ArrowRight,
 } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -168,7 +170,205 @@ function StepEditor({ value, onChange }) {
   );
 }
 
-function CampaignStepsModal({ store, onClose }) {
+function CopyStepsPicker({ targetStore, allStores, onClose, onCopied }) {
+  const [sourceStoreId, setSourceStoreId] = useState('');
+  const [sourceSteps, setSourceSteps] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [copying, setCopying] = useState(false);
+  const [error, setError] = useState('');
+
+  const candidates = (allStores || []).filter(
+    (s) => s.store_id !== targetStore.store_id && Number(s.step_count || 0) > 0
+  );
+
+  async function loadSteps(storeId) {
+    setSourceStoreId(storeId);
+    setSelected(new Set());
+    setError('');
+    if (!storeId) {
+      setSourceSteps([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.get(`/admin/remarket/stores/${storeId}/steps`);
+      const items = res.data.items || [];
+      setSourceSteps(items);
+      setSelected(new Set(items.map((i) => i.id)));
+    } catch {
+      setError('Erro ao carregar steps da loja origem.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function toggle(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleCopy() {
+    if (selected.size === 0) {
+      setError('Selecione ao menos um step.');
+      return;
+    }
+    setCopying(true);
+    setError('');
+    try {
+      const res = await api.post(`/admin/remarket/stores/${targetStore.store_id}/steps/copy`, {
+        source_step_ids: Array.from(selected),
+      });
+      onCopied?.(res.data.count || 0);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao copiar steps.');
+    } finally {
+      setCopying(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70">
+      <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+          <h2 className="font-semibold text-white flex items-center gap-2 text-sm">
+            <Copy className="h-4 w-4 text-violet-400" />
+            Copiar steps para <span className="text-violet-300">{targetStore.store_name}</span>
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+          {/* Source store selector */}
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5">Loja de origem</label>
+            <select
+              value={sourceStoreId}
+              onChange={(e) => loadSteps(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Selecione uma loja...</option>
+              {candidates.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name} ({s.step_count} step{s.step_count === 1 ? '' : 's'})
+                </option>
+              ))}
+            </select>
+            {candidates.length === 0 && (
+              <p className="text-xs text-gray-500 mt-1">Nenhuma outra loja tem steps cadastrados.</p>
+            )}
+          </div>
+
+          {loading && (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-violet-400" />
+            </div>
+          )}
+
+          {!loading && sourceSteps.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-400">
+                  {selected.size} de {sourceSteps.length} selecionados
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelected(new Set(sourceSteps.map((s) => s.id)))}
+                    className="text-xs text-violet-400 hover:text-violet-300"
+                  >
+                    Todos
+                  </button>
+                  <span className="text-gray-600">·</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(new Set())}
+                    className="text-xs text-violet-400 hover:text-violet-300"
+                  >
+                    Nenhum
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {sourceSteps.map((step) => {
+                  const checked = selected.has(step.id);
+                  return (
+                    <label
+                      key={step.id}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                        checked
+                          ? 'border-violet-500 bg-violet-500/10'
+                          : 'border-gray-700 bg-gray-700/30 hover:border-gray-600'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggle(step.id)}
+                        className="w-4 h-4 rounded accent-violet-500 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono text-gray-500">#{step.ord}</span>
+                          <span className="text-sm text-white truncate">{step.name}</span>
+                          <ChannelBadge type={step.delivery_type} />
+                        </div>
+                        <div className="text-xs text-gray-400 truncate mt-0.5">
+                          <span className="text-gray-500">Template:</span>{' '}
+                          <code>{step.template || '—'}</code>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">{timingLabel(step)}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-3 flex items-center gap-1">
+                <ArrowRight className="h-3 w-3" />
+                Os steps copiados serão adicionados ao final da sequência atual de{' '}
+                <span className="text-gray-300">{targetStore.store_name}</span>.
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-700 shrink-0 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleCopy}
+            disabled={copying || selected.size === 0}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white transition-colors"
+          >
+            {copying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+            Copiar {selected.size} step{selected.size === 1 ? '' : 's'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CampaignStepsModal({ store, allStores, onClose }) {
   const [steps, setSteps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -185,6 +385,7 @@ function CampaignStepsModal({ store, onClose }) {
 
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [showCopyPicker, setShowCopyPicker] = useState(false);
 
   const dragIndexRef = useRef(null);
   const [dragOver, setDragOver] = useState(null);
@@ -476,12 +677,21 @@ function CampaignStepsModal({ store, onClose }) {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-700 shrink-0 flex justify-between items-center">
           {!showAdd && !loading ? (
-            <button
-              onClick={() => setShowAdd(true)}
-              className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white transition-colors"
-            >
-              <Plus className="h-4 w-4" /> Adicionar Step
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowAdd(true)}
+                className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white transition-colors"
+              >
+                <Plus className="h-4 w-4" /> Adicionar Step
+              </button>
+              <button
+                onClick={() => setShowCopyPicker(true)}
+                className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                title="Copiar steps de outra loja"
+              >
+                <Copy className="h-4 w-4" /> Copiar de outra loja
+              </button>
+            </div>
           ) : (
             <div />
           )}
@@ -493,6 +703,18 @@ function CampaignStepsModal({ store, onClose }) {
           </button>
         </div>
       </div>
+
+      {showCopyPicker && (
+        <CopyStepsPicker
+          targetStore={store}
+          allStores={allStores}
+          onClose={() => setShowCopyPicker(false)}
+          onCopied={async () => {
+            setShowCopyPicker(false);
+            await fetchSteps();
+          }}
+        />
+      )}
 
       {toDelete && (
         <ConfirmModal
@@ -599,7 +821,9 @@ export default function RemarketingCampaigns() {
         </div>
       )}
 
-      {selected && <CampaignStepsModal store={selected} onClose={handleClose} />}
+      {selected && (
+        <CampaignStepsModal store={selected} allStores={stores} onClose={handleClose} />
+      )}
     </div>
   );
 }
