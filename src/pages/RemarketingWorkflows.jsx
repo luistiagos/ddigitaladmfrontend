@@ -40,6 +40,8 @@ const getEmptyFilters = () => ({
   status: '',
   store_id: '',
   lead_id: '',
+  email: '',
+  phone: '',
   start_date: '',
   end_date: '',
 });
@@ -72,6 +74,8 @@ export default function RemarketingWorkflows() {
       if (applied.status) params.set('status', applied.status);
       if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.lead_id) params.set('lead_id', applied.lead_id);
+      if (applied.email) params.set('email', applied.email);
+      if (applied.phone) params.set('phone', applied.phone);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
       params.set('sort_column', sortColumn);
@@ -234,6 +238,20 @@ export default function RemarketingWorkflows() {
             placeholder="Lead ID"
             value={filters.lead_id}
             onChange={(e) => setFilters((f) => ({ ...f, lead_id: e.target.value }))}
+            className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          />
+          <input
+            type="text"
+            placeholder="E-mail"
+            value={filters.email}
+            onChange={(e) => setFilters((f) => ({ ...f, email: e.target.value }))}
+            className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          />
+          <input
+            type="text"
+            placeholder="Telefone"
+            value={filters.phone}
+            onChange={(e) => setFilters((f) => ({ ...f, phone: e.target.value }))}
             className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
           />
           <input
