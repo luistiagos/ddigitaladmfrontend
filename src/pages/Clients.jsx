@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, UserCheck, UserX, Eye } from 'lucide-react';
+import { Search, X, UserCheck, UserX, Eye, Pencil } from 'lucide-react';
 import api from '@/services/api';
 import Badge from '@/components/ui/Badge';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import ClientProductsModal from '@/modals/ClientProductsModal';
+import EditClientModal from '@/modals/EditClientModal';
 import useAdminGrid from '@/utils/useAdminGrid';
 
 const PER_PAGE = 20;
@@ -23,6 +24,7 @@ export default function Clients() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [toToggle, setToToggle] = useState(null);
   const [toggling, setToggling] = useState(false);
+  const [toEdit, setToEdit] = useState(null);
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'created_at', defaultDir: 'desc' });
 
@@ -112,6 +114,13 @@ export default function Clients() {
             className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
           >
             <Eye className="h-3.5 w-3.5" /> Ver
+          </button>
+          <button
+            onClick={() => setToEdit(r)}
+            title="Editar cliente"
+            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-violet-600/20 hover:bg-violet-600/30 text-violet-400 transition-colors"
+          >
+            <Pencil className="h-3.5 w-3.5" /> Editar
           </button>
           <button
             onClick={() => setToToggle(r)}
@@ -246,6 +255,15 @@ export default function Clients() {
         <ClientProductsModal
           client={selectedClient}
           onClose={() => setSelectedClient(null)}
+        />
+      )}
+
+      {/* Edit client details modal */}
+      {toEdit && (
+        <EditClientModal
+          client={toEdit}
+          onClose={() => setToEdit(null)}
+          onSaveSuccess={() => fetchClients()}
         />
       )}
     </div>

@@ -106,7 +106,11 @@ export default function Leads() {
   return (
     <div>
       {selectedLead && (
-        <LeadDetailModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
+        <LeadDetailModal
+          lead={selectedLead}
+          onClose={() => setSelectedLead(null)}
+          onSaveSuccess={fetchData}
+        />
       )}
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-white">Leads</h1>

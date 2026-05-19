@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Send, Loader2, CheckCircle, XCircle, Eye, MessageCircle } from 'lucide-react';
+import { X, Send, Loader2, CheckCircle, XCircle, Eye, MessageCircle, Pencil } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import { formatDateTime, formatCurrency } from '@/utils/format';
@@ -44,13 +44,48 @@ function paymentMethodLabel(methodId, typeId) {
   return method || type;
 }
 
-export default function TransactionDetailModal({ transaction: tx, onClose }) {
+export default function TransactionDetailModal({ transaction: initialTx, onClose, onSaveSuccess }) {
+  const [tx, setTx] = useState(initialTx);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState(null);
   const [remarketing, setRemarketing] = useState(false); // loading wpp link
   const [wppError, setWppError] = useState(''); // error message for wpp recovery
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [editEmail, setEditEmail] = useState(initialTx.email || '');
+  const [editPhone, setEditPhone] = useState(initialTx.phone || '');
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
+
   const showRemarketing = REMARKET_STATUSES.includes(tx.status) && tx.phone;
+
+  async function handleSaveDetails() {
+    setDetailsError('');
+    if (!editEmail.trim()) {
+      setDetailsError('E-mail é obrigatório.');
+      return;
+    }
+    setSavingDetails(true);
+    try {
+      await api.put(`/admin/transactions/${tx.id}`, {
+        email: editEmail.trim(),
+        phone: editPhone.trim() || null,
+      });
+      setTx(prev => ({
+        ...prev,
+        email: editEmail.trim(),
+        phone: editPhone.trim() || null
+      }));
+      setIsEditing(false);
+      if (onSaveSuccess) {
+        onSaveSuccess();
+      }
+    } catch (err) {
+      setDetailsError(err.response?.data?.error || 'Erro ao salvar alterações.');
+    } finally {
+      setSavingDetails(false);
+    }
+  }
 
   async function handleOpenWpp() {
     setRemarketing(true);
@@ -124,8 +159,73 @@ export default function TransactionDetailModal({ transaction: tx, onClose }) {
             <InfoField label="Status">
               <Badge variant={statusVariant(tx.status)}>{tx.status || '—'}</Badge>
             </InfoField>
-            <InfoField label="E-mail" value={tx.email || '—'} />
-            <InfoField label="Telefone" value={tx.phone || '—'} />
+            {isEditing ? (
+              <div className="col-span-2 grid grid-cols-2 gap-3 border border-violet-500/30 bg-violet-500/5 p-3 rounded-lg">
+                <div className="col-span-2 text-xs font-semibold text-violet-400">Editar Dados do Cliente</div>
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-400 mb-1">E-mail *</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full rounded-md bg-gray-700 border border-gray-600 px-2 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-400 mb-1">Telefone</label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full rounded-md bg-gray-700 border border-gray-600 px-2 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+                {detailsError && (
+                  <div className="col-span-2 text-xs text-red-400 bg-red-500/10 p-1.5 rounded border border-red-500/20">{detailsError}</div>
+                )}
+                <div className="col-span-2 flex gap-2 justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditEmail(tx.email || '');
+                      setEditPhone(tx.phone || '');
+                      setDetailsError('');
+                    }}
+                    className="px-2.5 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveDetails}
+                    disabled={savingDetails}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs rounded bg-violet-600 hover:bg-violet-700 text-white font-medium disabled:opacity-60"
+                  >
+                    {savingDetails && <Loader2 className="h-3 w-3 animate-spin" />}
+                    Salvar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <InfoField label="E-mail">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-200 break-all">{tx.email || '—'}</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="text-violet-400 hover:text-violet-300 p-0.5"
+                      title="Editar e-mail e telefone"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </InfoField>
+                <InfoField label="Telefone" value={tx.phone || '—'} />
+              </>
+            )}
             <InfoField label="Produto" value={tx.title || '—'} />
             <InfoField label="Valor" value={formatCurrency(tx.value)} />
             <InfoField label="Data/Hora" value={formatDateTime(tx.datetime)} />

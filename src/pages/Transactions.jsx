@@ -121,6 +121,7 @@ export default function Transactions() {
         <TransactionDetailModal
           transaction={selectedTx}
           onClose={() => setSelectedTx(null)}
+          onSaveSuccess={fetchData}
         />
       )}
       <div className="mb-6">
