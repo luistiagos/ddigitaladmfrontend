@@ -1,10 +1,10 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight, Search, Copy } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { formatCurrency } from '@/utils/format';
 
-const EMPTY_FORM = { title: '', price: '', image: '', purchaselink: '', deliverlink: '' };
+const EMPTY_FORM = { title: '', price: '', image: '', purchaselink: '', deliverlink: '', prd_content: '', add_pkg: '' };
 const PER_PAGE = 20;
 
 export default function Products() {
@@ -77,6 +77,8 @@ export default function Products() {
       image: p.image || '',
       purchaselink: p.purchaselink || '',
       deliverlink: p.deliverlink || '',
+      prd_content: p.prd_content || '',
+      add_pkg: p.add_pkg || '',
     });
     setImgPreview(p.image || '');
     setImgError(false);
@@ -105,8 +107,8 @@ export default function Products() {
         image: form.image.trim() || null,
         purchaselink: form.purchaselink.trim() || null,
         deliverlink: form.deliverlink.trim() || null,
-        add_pkg: editing?.add_pkg || null,
-        prd_content: editing?.prd_content || null,
+        add_pkg: form.add_pkg.trim() || null,
+        prd_content: form.prd_content.trim() || null,
       };
       if (editing) {
         await api.put(`/admin/items/${editing.id}`, payload);
@@ -350,6 +352,28 @@ export default function Products() {
                   value={form.deliverlink}
                   onChange={e => setForm(f => ({ ...f, deliverlink: e.target.value }))}
                   placeholder="https://..."
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Benefícios/Destaques (um por linha)</label>
+                <textarea
+                  value={form.prd_content}
+                  onChange={e => setForm(f => ({ ...f, prd_content: e.target.value }))}
+                  placeholder="ex: Acesso Imediato&#10;Download Rápido&#10;Atualizações Gratuitas"
+                  rows={4}
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Metadados/Sub-pacotes (JSON)</label>
+                <input
+                  type="text"
+                  value={form.add_pkg}
+                  onChange={e => setForm(f => ({ ...f, add_pkg: e.target.value }))}
+                  placeholder="ex: [9021115]"
                   className={inputCls}
                 />
               </div>

@@ -7,7 +7,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 // StorePackagesModal  manage products / order-bumps linked to a store
 // ---------------------------------------------------------------------------
 
-const EMPTY_ADD = { package_id: '', principal: '0', active: true, price: '', relprice: '', description: '', members_only: false };
+const EMPTY_ADD = { package_id: '', principal: '0', active: true, price: '', relprice: '', title: '', description: '', members_only: false };
 
 function StorePackagesModal({ store, onClose }) {
   const [spItems, setSpItems] = useState([]);
@@ -73,6 +73,7 @@ function StorePackagesModal({ store, onClose }) {
       active: sp.active !== 0,
       price: sp.price ?? '',
       relprice: sp.relprice ?? '',
+      title: sp.title ?? '',
       description: sp.description ?? '',
       members_only: !!sp.members_only,
     });
@@ -89,6 +90,7 @@ function StorePackagesModal({ store, onClose }) {
         active: editForm.active,
         price: isNaN(parsedPrice) ? null : parsedPrice,
         relprice: isNaN(parsedRelPrice) ? null : parsedRelPrice,
+        title: editForm.title?.trim() || null,
         description: editForm.description?.trim() || null,
         members_only: editForm.members_only,
       });
@@ -128,6 +130,7 @@ function StorePackagesModal({ store, onClose }) {
         active: addForm.active,
         price: isNaN(parsedPrice) ? null : parsedPrice,
         relprice: isNaN(parsedRelPrice) ? null : parsedRelPrice,
+        title: addForm.title?.trim() || null,
         description: addForm.description?.trim() || null,
         members_only: addForm.members_only,
       });
@@ -289,6 +292,12 @@ function StorePackagesModal({ store, onClose }) {
                         placeholder="Opcional" className={inputCls} />
                     </div>
                     <div className="col-span-2">
+                      <label className="block text-xs text-gray-400 mb-1">Título Customizado (override)</label>
+                      <input type="text" value={editForm.title}
+                        onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                        placeholder="Deixe em branco para usar o padrão" className={inputCls} />
+                    </div>
+                    <div className="col-span-2">
                       <label className="block text-xs text-gray-400 mb-1">Descrição</label>
                       <textarea
                         rows={3}
@@ -425,6 +434,12 @@ function StorePackagesModal({ store, onClose }) {
                   <input type="text" inputMode="decimal" value={addForm.relprice}
                     onChange={e => setAddForm(f => ({ ...f, relprice: e.target.value }))}
                     placeholder="Opcional" className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-400 mb-1">Título Customizado (override)</label>
+                  <input type="text" value={addForm.title}
+                    onChange={e => setAddForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="Deixe em branco para usar o padrão" className={inputCls} />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs text-gray-400 mb-1">Descrição</label>
