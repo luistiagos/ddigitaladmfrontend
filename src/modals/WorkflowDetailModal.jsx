@@ -34,6 +34,23 @@ function stepStatusVariant(status) {
   return 'gray';
 }
 
+// Status em que o workflow já terminou no Temporal — não aceita mais
+// signals (pause/resume/cancel/confirm/retry-step), todos retornariam erro.
+const TERMINAL_STATUSES = [
+  'completed',
+  'purchased',
+  'canceled',
+  'cancelled',
+  'error',
+  'failed',
+  'skipped',
+  'no_sequence',
+];
+
+function isTerminalStatus(status) {
+  return TERMINAL_STATUSES.includes((status || '').toLowerCase());
+}
+
 function fmt(ts) {
   if (!ts) return '—';
   try {
@@ -89,10 +106,32 @@ export default function WorkflowDetailModal({ workflowId, onClose, onChange }) {
     }
   }
 
+  // Re-dispara o workflow do zero para o lead. Usado pelo "Tentar novamente"
+  // quando o workflow já terminou — sinalizar um workflow morto dá erro.
+  async function reRunWorkflow() {
+    if (!data?.lead_id) {
+      setActionMsg('Tentar novamente: lead_id indisponível');
+      return;
+    }
+    setActingOn('Tentar novamente');
+    setActionMsg('');
+    try {
+      await api.post('/admin/remarket/run-planner-for-lead', { lead_id: data.lead_id });
+      setActionMsg('Tentar novamente: novo workflow disparado');
+      await fetchData();
+      onChange?.();
+    } catch (err) {
+      setActionMsg(`Tentar novamente: ${err.response?.data?.error || 'falhou'}`);
+    } finally {
+      setActingOn(null);
+    }
+  }
+
   const state = data?.live_state || data?.last_response_json?.state || null;
   const events = state?.events || [];
   const sentSteps = state?.sent_steps || [];
   const status = state?.status || data?.status || '—';
+  const terminal = isTerminalStatus(status);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
@@ -221,37 +260,51 @@ export default function WorkflowDetailModal({ workflowId, onClose, onChange }) {
         {/* Action footer */}
         <div className="px-6 py-4 border-t border-gray-700 shrink-0">
           {actionMsg && <div className="text-xs text-gray-300 mb-2">{actionMsg}</div>}
+          {terminal && (
+            <div className="text-xs text-gray-500 mb-2">
+              Workflow finalizado ({status}). Use "Tentar novamente" para disparar um novo ciclo para este lead.
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
+            {/* Pausar / Retomar / Confirmar step / Cancelar só fazem sentido
+                enquanto o workflow está ativo — em estado terminal todos
+                retornariam erro do Temporal. */}
+            {!terminal && (
+              <>
+                <button
+                  onClick={() => runAction('Pausar', 'pause')}
+                  disabled={!!actingOn}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-300 transition-colors disabled:opacity-60"
+                >
+                  {actingOn === 'Pausar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                  Pausar
+                </button>
+                <button
+                  onClick={() => runAction('Retomar', 'resume')}
+                  disabled={!!actingOn}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-300 transition-colors disabled:opacity-60"
+                >
+                  {actingOn === 'Retomar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                  Retomar
+                </button>
+                <button
+                  onClick={() => runAction('Confirmar step', 'confirm-step')}
+                  disabled={!!actingOn}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 transition-colors disabled:opacity-60"
+                >
+                  {actingOn === 'Confirmar step' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-3.5 w-3.5" />
+                  )}
+                  Confirmar step
+                </button>
+              </>
+            )}
+            {/* "Tentar novamente": em workflow ativo sinaliza retry do step;
+                em workflow terminal re-dispara um novo workflow do zero. */}
             <button
-              onClick={() => runAction('Pausar', 'pause')}
-              disabled={!!actingOn}
-              className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-300 transition-colors disabled:opacity-60"
-            >
-              {actingOn === 'Pausar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
-              Pausar
-            </button>
-            <button
-              onClick={() => runAction('Retomar', 'resume')}
-              disabled={!!actingOn}
-              className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-300 transition-colors disabled:opacity-60"
-            >
-              {actingOn === 'Retomar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-              Retomar
-            </button>
-            <button
-              onClick={() => runAction('Confirmar step', 'confirm-step')}
-              disabled={!!actingOn}
-              className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 transition-colors disabled:opacity-60"
-            >
-              {actingOn === 'Confirmar step' ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <CheckCircle className="h-3.5 w-3.5" />
-              )}
-              Confirmar step
-            </button>
-            <button
-              onClick={() => runAction('Tentar novamente', 'retry-step')}
+              onClick={() => (terminal ? reRunWorkflow() : runAction('Tentar novamente', 'retry-step'))}
               disabled={!!actingOn}
               className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 transition-colors disabled:opacity-60"
             >
@@ -262,14 +315,16 @@ export default function WorkflowDetailModal({ workflowId, onClose, onChange }) {
               )}
               Tentar novamente
             </button>
-            <button
-              onClick={() => runAction('Cancelar', 'cancel')}
-              disabled={!!actingOn}
-              className="ml-auto inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-60"
-            >
-              {actingOn === 'Cancelar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
-              Cancelar workflow
-            </button>
+            {!terminal && (
+              <button
+                onClick={() => runAction('Cancelar', 'cancel')}
+                disabled={!!actingOn}
+                className="ml-auto inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors disabled:opacity-60"
+              >
+                {actingOn === 'Cancelar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                Cancelar workflow
+              </button>
+            )}
           </div>
         </div>
       </div>
