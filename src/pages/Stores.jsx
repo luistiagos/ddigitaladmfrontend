@@ -738,7 +738,7 @@ export default function Stores() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl">
+          <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
               <h2 className="font-semibold text-white flex items-center gap-2">
                 <Store className="h-4 w-4 text-violet-400" />
@@ -749,41 +749,44 @@ export default function Stores() {
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="px-6 py-5 flex flex-col gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Nome *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="ex: Loja Principal"
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                  required
-                />
-              </div>
+            <form onSubmit={handleSave} className="px-6 py-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Nome *</label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="ex: Loja Principal"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">URL da Página</label>
-                <input
-                  type="url"
-                  value={form.url_page}
-                  onChange={(e) => setForm(f => ({ ...f, url_page: e.target.value }))}
-                  placeholder="https://..."
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">URL da Página</label>
+                  <input
+                    type="url"
+                    value={form.url_page}
+                    onChange={(e) => setForm(f => ({ ...f, url_page: e.target.value }))}
+                    placeholder="https://..."
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">URL da Thumbnail</label>
-                <input
-                  type="url"
-                  value={form.url_thumb}
-                  onChange={(e) => handleThumbChange(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                />
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">URL da Thumbnail</label>
+                  <input
+                    type="url"
+                    value={form.url_thumb}
+                    onChange={(e) => handleThumbChange(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
+
                 {thumbPreview && (
-                  <div className="mt-2 rounded-lg overflow-hidden border border-gray-600 bg-gray-700 h-32 flex items-center justify-center">
+                  <div className="md:col-span-2 rounded-lg overflow-hidden border border-gray-600 bg-gray-700 h-32 flex items-center justify-center">
                     {!thumbError ? (
                       <img
                         src={thumbPreview}
@@ -799,50 +802,50 @@ export default function Stores() {
                     )}
                   </div>
                 )}
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Cor do Tema do Checkout</label>
-                <input
-                  type="text"
-                  value={form.checkout_theme_color}
-                  onChange={(e) => setForm(f => ({ ...f, checkout_theme_color: e.target.value }))}
-                  placeholder="ex: green, blue, #00b04a"
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Cor do Tema do Checkout</label>
+                  <input
+                    type="text"
+                    value={form.checkout_theme_color}
+                    onChange={(e) => setForm(f => ({ ...f, checkout_theme_color: e.target.value }))}
+                    placeholder="ex: green, blue, #00b04a"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Mensagem do WhatsApp (Checkout)</label>
-                <input
-                  type="text"
-                  value={form.checkout_whatsapp_text}
-                  onChange={(e) => setForm(f => ({ ...f, checkout_whatsapp_text: e.target.value }))}
-                  placeholder="ex: Olá, preciso de ajuda com o pedido..."
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Texto de Preço Destaque (Checkout)</label>
+                  <input
+                    type="text"
+                    value={form.checkout_headline_price}
+                    onChange={(e) => setForm(f => ({ ...f, checkout_headline_price: e.target.value }))}
+                    placeholder="ex: 7x de R$ 6,56"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Texto de Preço Destaque (Checkout)</label>
-                <input
-                  type="text"
-                  value={form.checkout_headline_price}
-                  onChange={(e) => setForm(f => ({ ...f, checkout_headline_price: e.target.value }))}
-                  placeholder="ex: 7x de R$ 6,56"
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                />
-              </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Mensagem do WhatsApp (Checkout)</label>
+                  <input
+                    type="text"
+                    value={form.checkout_whatsapp_text}
+                    onChange={(e) => setForm(f => ({ ...f, checkout_whatsapp_text: e.target.value }))}
+                    placeholder="ex: Olá, preciso de ajuda com o pedido..."
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Lista de Benefícios (um por linha)</label>
-                <textarea
-                  value={form.checkout_features}
-                  onChange={(e) => setForm(f => ({ ...f, checkout_features: e.target.value }))}
-                  placeholder="Acesso Imediato&#10;Mais de 1000 jogos&#10;Suporte 24h"
-                  rows={4}
-                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                />
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Lista de Benefícios (um por linha)</label>
+                  <textarea
+                    value={form.checkout_features}
+                    onChange={(e) => setForm(f => ({ ...f, checkout_features: e.target.value }))}
+                    placeholder="Acesso Imediato&#10;Mais de 1000 jogos&#10;Suporte 24h"
+                    rows={4}
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
               </div>
 
               {formError && (
