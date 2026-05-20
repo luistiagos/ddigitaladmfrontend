@@ -67,6 +67,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/remarketing/campanhas', label: 'Campanhas', icon: SendIcon },
       { to: '/remarketing/workflows', label: 'Workflows', icon: Activity },
+      { to: '/remarketing/whatsapp-sender', label: 'WhatsApp Sender', icon: MessageCircle },
     ],
   },
   {

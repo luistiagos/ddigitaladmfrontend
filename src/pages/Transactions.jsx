@@ -16,9 +16,19 @@ const ALL_STATUSES = [
   'charged_back', 'in_mediation', 'cancelled',
 ];
 
+const PAYMENT_TYPES = [
+  { value: 'bank_transfer', label: 'Pix / TED' },
+  { value: 'credit_card', label: 'Cartão de Crédito' },
+  { value: 'debit_card', label: 'Cartão de Débito' },
+  { value: 'ticket', label: 'Boleto' },
+  { value: 'prepaid_card', label: 'Cartão Pré-pago' },
+  { value: 'digital_currency', label: 'Moeda Digital' },
+  { value: 'digital_wallet', label: 'Carteira Digital' },
+];
+
 const EMPTY_FILTERS = {
   email: '', phone: '', product_id: '', status: '',
-  store_id: '', start_date: '', end_date: '',
+  store_id: '', start_date: '', end_date: '', payment_type_id: '',
 };
 
 export default function Transactions() {
@@ -47,6 +57,7 @@ export default function Transactions() {
       if (applied.phone) params.set('phone', applied.phone);
       if (applied.product_id) params.set('product_id', applied.product_id);
       if (applied.status) params.set('status', applied.status);
+      if (applied.payment_type_id) params.set('payment_type_id', applied.payment_type_id);
       if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
@@ -162,6 +173,14 @@ export default function Transactions() {
           >
             <option value="">Todos os status</option>
             {ALL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select
+            value={filters.payment_type_id}
+            onChange={(e) => setFilters((f) => ({ ...f, payment_type_id: e.target.value }))}
+            className={SEL_CLS}
+          >
+            <option value="">Todos os meios de pagamento</option>
+            {PAYMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
           <select
             value={filters.store_id}

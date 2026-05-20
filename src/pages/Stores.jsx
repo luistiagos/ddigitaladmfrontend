@@ -511,7 +511,7 @@ function StorePackagesModal({ store, onClose }) {
 // Stores page
 // ---------------------------------------------------------------------------
 
-const EMPTY_FORM = { name: '', url_thumb: '', url_page: '' };
+const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '' };
 
 export default function Stores() {
   const [stores, setStores] = useState([]);
@@ -558,7 +558,15 @@ export default function Stores() {
 
   function openEdit(s) {
     setEditing(s);
-    setForm({ name: s.name || '', url_thumb: s.url_thumb || '', url_page: s.url_page || '' });
+    setForm({ 
+      name: s.name || '', 
+      url_thumb: s.url_thumb || '', 
+      url_page: s.url_page || '',
+      checkout_features: s.checkout_features || '',
+      checkout_theme_color: s.checkout_theme_color || '',
+      checkout_whatsapp_text: s.checkout_whatsapp_text || '',
+      checkout_headline_price: s.checkout_headline_price || ''
+    });
     setThumbPreview(s.url_thumb || '');
     setThumbError(false);
     setFormError('');
@@ -583,6 +591,10 @@ export default function Stores() {
         url_thumb: form.url_thumb.trim() || null,
         url_checkout: null,
         url_page: form.url_page.trim() || null,
+        checkout_features: form.checkout_features || null,
+        checkout_theme_color: form.checkout_theme_color || null,
+        checkout_whatsapp_text: form.checkout_whatsapp_text || null,
+        checkout_headline_price: form.checkout_headline_price || null,
       };
       if (editing) {
         await api.put(`/admin/stores/${editing.id}`, payload);
@@ -620,6 +632,10 @@ export default function Stores() {
         url_thumb: s.url_thumb || null,
         url_checkout: s.url_checkout || null,
         url_page: s.url_page || null,
+        checkout_features: s.checkout_features || null,
+        checkout_theme_color: s.checkout_theme_color || null,
+        checkout_whatsapp_text: s.checkout_whatsapp_text || null,
+        checkout_headline_price: s.checkout_headline_price || null,
       };
       const res = await api.post(`/admin/stores/${s.id}/copy`, payload);
       const newStore = { ...payload, id: res.data.id };
@@ -783,6 +799,50 @@ export default function Stores() {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Cor do Tema do Checkout</label>
+                <input
+                  type="text"
+                  value={form.checkout_theme_color}
+                  onChange={(e) => setForm(f => ({ ...f, checkout_theme_color: e.target.value }))}
+                  placeholder="ex: green, blue, #00b04a"
+                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Mensagem do WhatsApp (Checkout)</label>
+                <input
+                  type="text"
+                  value={form.checkout_whatsapp_text}
+                  onChange={(e) => setForm(f => ({ ...f, checkout_whatsapp_text: e.target.value }))}
+                  placeholder="ex: Olá, preciso de ajuda com o pedido..."
+                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Texto de Preço Destaque (Checkout)</label>
+                <input
+                  type="text"
+                  value={form.checkout_headline_price}
+                  onChange={(e) => setForm(f => ({ ...f, checkout_headline_price: e.target.value }))}
+                  placeholder="ex: 7x de R$ 6,56"
+                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Lista de Benefícios (um por linha)</label>
+                <textarea
+                  value={form.checkout_features}
+                  onChange={(e) => setForm(f => ({ ...f, checkout_features: e.target.value }))}
+                  placeholder="Acesso Imediato&#10;Mais de 1000 jogos&#10;Suporte 24h"
+                  rows={4}
+                  className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                />
               </div>
 
               {formError && (
