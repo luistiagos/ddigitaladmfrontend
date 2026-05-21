@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, Save, CheckCircle, Settings2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Eye, EyeOff, Save, CheckCircle, Settings2, MessageCircle, Power } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import { getSettings, saveSettings, hasProvider } from '@/utils/settings';
+import api from '@/services/api';
 
 const PROVIDERS = [
   {
@@ -89,6 +90,135 @@ function TokenField({ field, value, onChange, showState, onToggleShow }) {
   );
 }
 
+function Toggle({ checked, onChange, label, description, disabled }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3">
+      <div className="flex-1">
+        <div className="text-sm font-medium text-white">{label}</div>
+        {description && <div className="text-xs text-gray-500 mt-0.5">{description}</div>}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed ${
+          checked ? 'bg-green-600' : 'bg-gray-600'
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            checked ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Seção de WhatsApp — flag de envio do link de acesso
+// ---------------------------------------------------------------------------
+function WhatsAppSection() {
+  const [enabled, setEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const savedTimerRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(savedTimerRef.current), []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/admin/wpp-sender/config');
+      setEnabled(!!data.send_access_whatsapp_enabled);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao carregar configuração de WhatsApp.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleToggle(newValue) {
+    setSaving(true);
+    setError('');
+    try {
+      const { data } = await api.put('/admin/wpp-sender/config', {
+        send_access_whatsapp_enabled: newValue,
+      });
+      setEnabled(!!data.send_access_whatsapp_enabled);
+      setSaved(true);
+      clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao salvar configuração de WhatsApp.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-green-400 flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" />
+            WhatsApp — Envio do Link de Acesso
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Controla se o link de acesso à área de membros é enviado também via WhatsApp,
+            além do e-mail.
+          </p>
+        </div>
+        <Badge variant={loading ? 'gray' : enabled ? 'green' : 'gray'}>
+          {loading ? 'Carregando…' : enabled ? 'Habilitado' : 'Desabilitado'}
+        </Badge>
+      </div>
+
+      {error && (
+        <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div className="border-t border-gray-700/50">
+        <Toggle
+          checked={enabled}
+          onChange={handleToggle}
+          disabled={loading || saving}
+          label="Enviar link de acesso via WhatsApp"
+          description={
+            enabled
+              ? 'Ligado — o link de acesso será enviado por e-mail E por WhatsApp.'
+              : 'Desligado — o link de acesso será enviado apenas por e-mail.'
+          }
+        />
+      </div>
+
+      <div className="mt-2 flex items-center gap-2">
+        <Power className={`h-3.5 w-3.5 ${enabled ? 'text-green-400' : 'text-gray-500'}`} />
+        <span className="text-xs text-gray-500">
+          {saving
+            ? 'Salvando…'
+            : saved
+            ? 'Salvo com sucesso!'
+            : 'A alteração é salva automaticamente ao mover o toggle.'}
+        </span>
+        {saved && <CheckCircle className="h-3.5 w-3.5 text-green-400" />}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Página principal
+// ---------------------------------------------------------------------------
 export default function Settings() {
   const [form, setForm] = useState(getSettings);
   const [show, setShow] = useState({});
@@ -125,6 +255,14 @@ export default function Settings() {
       </div>
 
       <div className="space-y-5">
+        {/* ---------------------------------------------------------------- */}
+        {/* Seção: WhatsApp — flag de envio do link de acesso                */}
+        {/* ---------------------------------------------------------------- */}
+        <WhatsAppSection />
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Provedores de integração (tokens salvos em localStorage)         */}
+        {/* ---------------------------------------------------------------- */}
         {PROVIDERS.map((provider) => {
           const connected = hasProvider(provider.key);
           return (
