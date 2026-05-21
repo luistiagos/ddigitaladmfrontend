@@ -297,8 +297,8 @@ export default function Products() {
       {/* Create / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+          <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
               <h2 className="font-semibold text-white flex items-center gap-2">
                 <Package className="h-4 w-4 text-violet-400" />
                 {editing ? 'Editar Produto' : 'Novo Produto'}
@@ -308,102 +308,104 @@ export default function Products() {
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="px-6 py-5 flex flex-col gap-4 overflow-y-auto">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Título *</label>
-                <input
-                  type="text"
-                  value={form.title}
-                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  placeholder="ex: Pacote Xbox 360"
-                  className={inputCls}
-                  required
-                />
-              </div>
+            <form onSubmit={handleSave} className="px-6 py-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Título *</label>
+                  <input
+                    type="text"
+                    value={form.title}
+                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="ex: Pacote Xbox 360"
+                    className={inputCls}
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Preço (R$) *</label>
-                <input
-                  type="number"
-                  min="0" step="0.01"
-                  value={form.price}
-                  onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-                  placeholder="ex: 39.90"
-                  className={inputCls}
-                  required
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Preço (R$) *</label>
+                  <input
+                    type="number"
+                    min="0" step="0.01"
+                    value={form.price}
+                    onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+                    placeholder="ex: 39.90"
+                    className={inputCls}
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Link de Compra</label>
-                <input
-                  type="url"
-                  value={form.purchaselink}
-                  onChange={e => setForm(f => ({ ...f, purchaselink: e.target.value }))}
-                  placeholder="https://..."
-                  className={inputCls}
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Link de Compra</label>
+                  <input
+                    type="url"
+                    value={form.purchaselink}
+                    onChange={e => setForm(f => ({ ...f, purchaselink: e.target.value }))}
+                    placeholder="https://..."
+                    className={inputCls}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Link de Entrega</label>
-                <input
-                  type="url"
-                  value={form.deliverlink}
-                  onChange={e => setForm(f => ({ ...f, deliverlink: e.target.value }))}
-                  placeholder="https://..."
-                  className={inputCls}
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Link de Entrega</label>
+                  <input
+                    type="url"
+                    value={form.deliverlink}
+                    onChange={e => setForm(f => ({ ...f, deliverlink: e.target.value }))}
+                    placeholder="https://..."
+                    className={inputCls}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Benefícios/Destaques (um por linha)</label>
-                <textarea
-                  value={form.prd_content}
-                  onChange={e => setForm(f => ({ ...f, prd_content: e.target.value }))}
-                  placeholder="ex: Acesso Imediato&#10;Download Rápido&#10;Atualizações Gratuitas"
-                  rows={4}
-                  className={inputCls}
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Metadados/Sub-pacotes (JSON)</label>
+                  <input
+                    type="text"
+                    value={form.add_pkg}
+                    onChange={e => setForm(f => ({ ...f, add_pkg: e.target.value }))}
+                    placeholder="ex: [9021115]"
+                    className={inputCls}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Metadados/Sub-pacotes (JSON)</label>
-                <input
-                  type="text"
-                  value={form.add_pkg}
-                  onChange={e => setForm(f => ({ ...f, add_pkg: e.target.value }))}
-                  placeholder="ex: [9021115]"
-                  className={inputCls}
-                />
-              </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Benefícios/Destaques (um por linha)</label>
+                  <textarea
+                    value={form.prd_content}
+                    onChange={e => setForm(f => ({ ...f, prd_content: e.target.value }))}
+                    placeholder="ex: Acesso Imediato&#10;Download Rápido&#10;Atualizações Gratuitas"
+                    rows={4}
+                    className={inputCls}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">URL da Imagem</label>
-                <input
-                  type="url"
-                  value={form.image}
-                  onChange={e => handleImgChange(e.target.value)}
-                  placeholder="https://..."
-                  className={inputCls}
-                />
-                {imgPreview && (
-                  <div className="mt-2 rounded-lg overflow-hidden border border-gray-600 bg-gray-700 h-32 flex items-center justify-center">
-                    {!imgError ? (
-                      <img
-                        src={imgPreview}
-                        alt="preview"
-                        className="w-full h-full object-cover"
-                        onError={() => setImgError(true)}
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center gap-1 text-gray-500">
-                        <ImageOff className="h-6 w-6" />
-                        <span className="text-xs">URL inválida ou imagem não carregou</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">URL da Imagem</label>
+                  <input
+                    type="url"
+                    value={form.image}
+                    onChange={e => handleImgChange(e.target.value)}
+                    placeholder="https://..."
+                    className={inputCls}
+                  />
+                  {imgPreview && (
+                    <div className="mt-2 rounded-lg overflow-hidden border border-gray-600 bg-gray-700 h-32 flex items-center justify-center">
+                      {!imgError ? (
+                        <img
+                          src={imgPreview}
+                          alt="preview"
+                          className="w-full h-full object-cover"
+                          onError={() => setImgError(true)}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 text-gray-500">
+                          <ImageOff className="h-6 w-6" />
+                          <span className="text-xs">URL inválida ou imagem não carregou</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {formError && (

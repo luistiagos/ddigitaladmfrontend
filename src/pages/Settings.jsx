@@ -103,7 +103,7 @@ function Toggle({ checked, onChange, label, description, disabled }) {
         aria-checked={checked}
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed ${
           checked ? 'bg-green-600' : 'bg-gray-600'
         }`}
       >
