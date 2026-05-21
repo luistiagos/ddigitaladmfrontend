@@ -804,14 +804,17 @@ export default function Stores() {
                 )}
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Cor do Tema do Checkout</label>
-                  <input
-                    type="text"
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Tema Visual do Checkout</label>
+                  <select
                     value={form.checkout_theme_color}
                     onChange={(e) => setForm(f => ({ ...f, checkout_theme_color: e.target.value }))}
-                    placeholder="ex: green, blue, #00b04a"
-                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-                  />
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500"
+                  >
+                    <option value="">Selecione um tema...</option>
+                    <option value="default">Default (Multigames - Verde Limão)</option>
+                    <option value="blue">Blue (Playstation - Azul)</option>
+                    <option value="green">Green (Xbox - Verde Escuro)</option>
+                  </select>
                 </div>
 
                 <div>
