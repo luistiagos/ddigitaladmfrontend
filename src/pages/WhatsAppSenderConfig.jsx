@@ -101,6 +101,7 @@ export default function WhatsAppSenderConfig() {
     max_per_day: 30,
     test_mode_enabled: true,
     test_phone: '5541985311304',
+    send_access_whatsapp_enabled: true,
   });
   const [stats, setStats] = useState({
     sent_today: 0,
@@ -124,6 +125,7 @@ export default function WhatsAppSenderConfig() {
         max_per_day: data.max_per_day ?? 30,
         test_mode_enabled: !!data.test_mode_enabled,
         test_phone: data.test_phone || '',
+        send_access_whatsapp_enabled: data.send_access_whatsapp_enabled ?? true,
       });
       setStats({
         sent_today: data.sent_today ?? 0,
@@ -154,6 +156,7 @@ export default function WhatsAppSenderConfig() {
         max_per_day: Number(form.max_per_day) || 1,
         test_mode_enabled: !!form.test_mode_enabled,
         test_phone: (form.test_phone || '').trim(),
+        send_access_whatsapp_enabled: !!form.send_access_whatsapp_enabled,
       };
       const { data } = await api.put('/admin/wpp-sender/config', payload);
       setForm({
@@ -163,6 +166,7 @@ export default function WhatsAppSenderConfig() {
         max_per_day: data.max_per_day,
         test_mode_enabled: !!data.test_mode_enabled,
         test_phone: data.test_phone || '',
+        send_access_whatsapp_enabled: !!data.send_access_whatsapp_enabled,
       });
       setStats({
         sent_today: data.sent_today ?? 0,
@@ -248,8 +252,15 @@ export default function WhatsAppSenderConfig() {
         <Toggle
           checked={form.enabled}
           onChange={(v) => setField('enabled', v)}
-          label="Habilitar envio via WhatsApp"
+          label="Habilitar remarketing via WhatsApp"
           description="Quando desligado, todos os steps de WhatsApp dos workflows são pulados (skipped) sem disparar mensagens."
+        />
+        <div className="border-t border-gray-700/50 my-2"></div>
+        <Toggle
+          checked={form.send_access_whatsapp_enabled}
+          onChange={(v) => setField('send_access_whatsapp_enabled', v)}
+          label="Habilitar entrega de produto via WhatsApp"
+          description="Quando desligado, o link de acesso ao produto recém-comprado será enviado apenas por e-mail."
         />
       </div>
 
