@@ -49,7 +49,7 @@ export default function Sales() {
   const [stores, setStores] = useState([]);
   const [filters, setFilters] = useState(getEmptyFilters);
   const [applied, setApplied] = useState(getEmptyFilters);
-  const [data, setData] = useState({ items: [], total: 0, total_value: null });
+  const [data, setData] = useState({ items: [], total: 0, total_value: null, total_gross: null, total_fees: null, total_net: null });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sending, setSending] = useState({});
@@ -80,7 +80,14 @@ export default function Sales() {
       params.set('sort_column', sortColumn);
       params.set('sort_direction', sortDirection);
       const res = await api.get(`/admin/transactions?${params}`);
-      setData({ items: res.data.items || [], total: res.data.total || 0, total_value: res.data.total_value ?? null });
+      setData({
+        items: res.data.items || [],
+        total: res.data.total || 0,
+        total_value: res.data.total_value ?? null,
+        total_gross: res.data.total_gross ?? res.data.total_value ?? null,
+        total_fees: res.data.total_fees ?? null,
+        total_net: res.data.total_net ?? null,
+      });
     } catch {
       setError('Erro ao carregar vendas.');
     } finally {
@@ -94,7 +101,7 @@ export default function Sales() {
   function clearFilters() { const empty = getEmptyFilters(); setFilters(empty); setApplied(empty); setPage(1); }
 
   async function resend(row, via) {
-    const key = `${row.id}_${via}`;
+    const key = `${row.id ?? row.order_id}_${via}`;
     setSending((s) => ({ ...s, [key]: true }));
     try {
       const payload = { email: row.email, product_id: row.product_id };
@@ -117,13 +124,37 @@ export default function Sales() {
     },
     {
       key: 'title', label: 'Produto',
-      render: r => r.title || '—',
+      render: r => (
+        <div className="flex items-center gap-2">
+          <span>{r.title || '—'}</span>
+          {r.has_transaction === false && (
+            <span
+              title="Venda sem transação acoplada (apenas Mercado Pago)"
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/30 whitespace-nowrap"
+            >
+              sem transação
+            </span>
+          )}
+        </div>
+      ),
       csvValue: r => r.title ?? '',
     },
     {
-      key: 'value', label: 'Preço', sortable: true, isValueColumn: true,
-      render: r => formatCurrency(r.value),
-      csvValue: r => r.value != null ? Number(r.value).toFixed(2).replace('.', ',') : '',
+      key: 'value', label: 'Bruto', sortable: true, isValueColumn: true,
+      render: r => formatCurrency(r.gross_amount ?? r.value),
+      csvValue: r => (r.gross_amount ?? r.value) != null ? Number(r.gross_amount ?? r.value).toFixed(2).replace('.', ',') : '',
+    },
+    {
+      key: 'total_fees', label: 'Taxas',
+      className: 'px-4 py-3 text-rose-300 whitespace-nowrap',
+      render: r => r.total_fees != null ? formatCurrency(r.total_fees) : '—',
+      csvValue: r => r.total_fees != null ? Number(r.total_fees).toFixed(2).replace('.', ',') : '',
+    },
+    {
+      key: 'net_amount', label: 'Líquido',
+      className: 'px-4 py-3 text-emerald-300 whitespace-nowrap',
+      render: r => r.net_amount != null ? formatCurrency(r.net_amount) : '—',
+      csvValue: r => r.net_amount != null ? Number(r.net_amount).toFixed(2).replace('.', ',') : '',
     },
     {
       key: 'datetime', label: 'Data', sortable: true,
@@ -157,18 +188,21 @@ export default function Sales() {
     },
     {
       key: 'actions', label: 'Ações',
-      render: r => (
+      render: r => {
+        const rk = r.id ?? r.order_id;
+        return (
         <div className="flex items-center gap-2">
           <ActionBtn icon={<Mail className="h-3.5 w-3.5" />} label="Email"
-            loading={sending[`${r.id}_email`]} feedback={feedback[`${r.id}_email`]}
+            loading={sending[`${rk}_email`]} feedback={feedback[`${rk}_email`]}
             onClick={() => resend(r, 'email')} />
           {r.phone && (
             <ActionBtn icon={<MessageCircle className="h-3.5 w-3.5" />} label="WhatsApp"
-              loading={sending[`${r.id}_whats`]} feedback={feedback[`${r.id}_whats`]}
+              loading={sending[`${rk}_whats`]} feedback={feedback[`${rk}_whats`]}
               onClick={() => resend(r, 'whats')} />
           )}
         </div>
-      ),
+        );
+      },
       csvValue: () => '',
     },
   ];
@@ -233,6 +267,15 @@ export default function Sales() {
         </div>
       </form>
 
+      {/* Resumo de totais (bruto / taxas / líquido) */}
+      {(data.total_gross != null || data.total_fees != null || data.total_net != null) && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <SummaryCard label="Total Bruto" value={data.total_gross} cls="text-cyan-300" />
+          <SummaryCard label="Total Taxas" value={data.total_fees} cls="text-rose-300" />
+          <SummaryCard label="Total Líquido" value={data.total_net} cls="text-emerald-300" />
+        </div>
+      )}
+
       <AdminGrid
         columns={columns}
         data={data}
@@ -263,12 +306,15 @@ function ProviderDetailModal({ row, onClose }) {
 
   const fields = [
     { label: 'ID Transação', value: row.id },
+    { label: 'ID Ordem MP', value: row.order_id },
     { label: isStripe ? 'Stripe Session ID' : 'MP Payment ID', value: row.mpid },
     { label: 'Payment ID', value: row.payment_id },
     !isStripe && { label: 'Preference ID', value: row.preference_id },
     { label: 'Status', value: row.status },
-    { label: 'Valor', value: formatCurrency(row.value) },
-    { label: 'Data / Hora', value: formatDateTime(row.datetime) },
+    { label: 'Bruto', value: row.gross_amount != null ? formatCurrency(row.gross_amount) : formatCurrency(row.value) },
+    { label: 'Taxas', value: row.total_fees != null ? formatCurrency(row.total_fees) : null },
+    { label: 'Líquido', value: row.net_amount != null ? formatCurrency(row.net_amount) : null },
+    { label: 'Data da venda', value: formatDateTime(row.paid_date || row.datetime) },
     { label: 'E-mail', value: row.email },
     { label: 'Telefone', value: row.phone },
     { label: 'Produto', value: row.title },
@@ -310,6 +356,17 @@ function ProviderDetailModal({ row, onClose }) {
             Fechar
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, cls }) {
+  return (
+    <div className="bg-gray-800/60 border border-gray-700 rounded-xl px-4 py-3">
+      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</div>
+      <div className={`text-lg font-semibold mt-0.5 ${cls}`}>
+        {value != null ? formatCurrency(value) : '—'}
       </div>
     </div>
   );
