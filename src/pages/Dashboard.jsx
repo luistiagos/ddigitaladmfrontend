@@ -102,12 +102,14 @@ export default function Dashboard() {
       .finally(() => setLoadingFb(false));
   }, [date, metaOk]);
 
-  const approvedTotal = stats?.approved_total || 0;
+  const approvedTotal = stats?.approved_total || 0;                       // bruto
+  const approvedNet = stats?.approved_total_net ?? stats?.approved_total ?? 0; // líquido
   const mpFees = stats?.mp_fees_total ?? null;
   const totalExpenses = (fbSpend ?? 0);
   const hasExpenses = metaOk;
   const fbReady = metaOk && !loadingFb && !fbError;
-  const lucroBruto = hasExpenses && fbReady && stats !== null ? approvedTotal - totalExpenses : null;
+  // Lucro com base no líquido (já descontadas as taxas do MP) menos despesas.
+  const lucroBruto = hasExpenses && fbReady && stats !== null ? approvedNet - totalExpenses : null;
 
   return (
     <div>
@@ -137,7 +139,7 @@ export default function Dashboard() {
                 icon={<ShoppingCart className="h-4 w-4" />}
                 label="Vendas Aprovadas"
                 value={stats?.approved_count ?? '—'}
-                sub={formatCurrency(approvedTotal)}
+                sub={`${formatCurrency(approvedTotal)} bruto`}
                 color="green"
               />
               <KpiCard
@@ -148,9 +150,9 @@ export default function Dashboard() {
               />
               <KpiCard
                 icon={<TrendingUp className="h-4 w-4" />}
-                label="Receita Total"
-                value={formatCurrency(approvedTotal)}
-                sub="Após taxas MP"
+                label="Receita Líquida"
+                value={formatCurrency(approvedNet)}
+                sub={`${formatCurrency(approvedTotal)} bruto · após taxas MP`}
                 color="violet"
               />
             </>
