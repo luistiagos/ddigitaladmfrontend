@@ -19,6 +19,7 @@ import {
   Package,
   Bot,
   MessageCircle,
+  MessageSquareQuote,
   MailSearch,
   MailWarning,
   TriangleAlert,
@@ -57,6 +58,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/bot',            label: 'Bot WhatsApp',      icon: Bot },
       { to: '/whatsapp-sessoes', label: 'Sessões WhatsApp', icon: MessageCircle },
+      { to: '/whatsapp-consultas', label: 'Consultas WhatsApp', icon: MessageSquareQuote },
       { to: '/email-activity', label: 'Atividade de Email', icon: MailSearch },
       { to: '/email-queue',    label: 'Fila de Emails',    icon: MailWarning },
     ],

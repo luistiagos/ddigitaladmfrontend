@@ -16,6 +16,7 @@ import Stores from '@/pages/Stores';
 import Products from '@/pages/Products';
 import BotConfig from '@/pages/BotConfig';
 import WhatsAppSessions from '@/pages/WhatsAppSessions';
+import WhatsAppConsults from '@/pages/WhatsAppConsults';
 import EmailActivity from '@/pages/EmailActivity';
 import EmailQueue from '@/pages/EmailQueue';
 import ErrorLog from '@/pages/ErrorLog';
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="stores" element={<Stores />} />
             <Route path="produtos" element={<Products />} />
             <Route path="whatsapp-sessoes" element={<WhatsAppSessions />} />
+            <Route path="whatsapp-consultas" element={<WhatsAppConsults />} />
             <Route path="email-activity" element={<EmailActivity />} />
             <Route path="email-queue" element={<EmailQueue />} />
             <Route path="remarketing/campanhas" element={<RemarketingCampaigns />} />
