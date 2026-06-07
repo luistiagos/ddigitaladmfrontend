@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, ScrollText } from 'lucide-react';
 import api from '@/services/api';
 import AdminGrid from '@/components/ui/AdminGrid';
+import DetailModal from '@/components/ui/DetailModal';
 import { formatDateTime } from '@/utils/format';
 import useAdminGrid from '@/utils/useAdminGrid';
 
@@ -21,8 +22,22 @@ export default function ErrorLog() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
 
+  // Modais: mensagem inteira e logs/stacktraces.
+  const [msgModal, setMsgModal]   = useState(null);   // { title, text } | null
+  const [logsModal, setLogsModal] = useState(null);   // { id, items, loading, error } | null
+
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'time', defaultDir: 'desc' });
+
+  const openLogs = useCallback(async (row) => {
+    setLogsModal({ id: row.id, items: [], loading: true });
+    try {
+      const res = await api.get(`/admin/errors/${row.id}/logs`);
+      setLogsModal({ id: row.id, items: res.data.items || [], loading: false });
+    } catch {
+      setLogsModal({ id: row.id, items: [], loading: false, error: true });
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -81,12 +96,33 @@ export default function ErrorLog() {
     {
       key: 'message', label: 'Mensagem',
       className: 'px-4 py-3 text-gray-400 text-xs max-w-[220px]',
-      render: r => (
-        <span className="block truncate" title={r.message || ''}>
-          {r.message || '—'}
-        </span>
-      ),
+      render: r => r.message ? (
+        <button
+          type="button"
+          onClick={() => setMsgModal({ title: `Mensagem — erro #${r.id}`, text: r.message })}
+          className="block w-full max-w-[220px] truncate text-left text-violet-300 hover:text-violet-200 hover:underline transition-colors"
+          title="Ver mensagem completa"
+        >
+          {r.message}
+        </button>
+      ) : '—',
       csvValue: r => r.message ?? '',
+    },
+    {
+      key: 'logs', label: 'Logs',
+      className: 'px-4 py-3 text-center w-16',
+      render: r => (r.logs_count > 0 ? (
+        <button
+          type="button"
+          onClick={() => openLogs(r)}
+          className="inline-flex items-center gap-1 text-violet-300 hover:text-violet-200 transition-colors"
+          title={`Ver ${r.logs_count} log(s)`}
+        >
+          <ScrollText className="h-4 w-4" />
+          <span className="text-xs">{r.logs_count}</span>
+        </button>
+      ) : <span className="text-gray-600">—</span>),
+      csvValue: r => r.logs_count ?? 0,
     },
     {
       key: 'project', label: 'Projeto',
@@ -229,6 +265,52 @@ export default function ErrorLog() {
         totalLabel="erro"
         title="erros"
       />
+
+      {/* Modal: mensagem inteira */}
+      {msgModal && (
+        <DetailModal
+          title={msgModal.title}
+          text={msgModal.text}
+          onClose={() => setMsgModal(null)}
+        />
+      )}
+
+      {/* Modal: logs / stacktraces */}
+      {logsModal && (
+        <DetailModal
+          title={`Logs — erro #${logsModal.id}`}
+          onClose={() => setLogsModal(null)}
+        >
+          {logsModal.loading ? (
+            <p className="text-sm text-gray-400">Carregando logs…</p>
+          ) : logsModal.error ? (
+            <p className="text-sm text-red-400">Erro ao carregar logs.</p>
+          ) : logsModal.items.length === 0 ? (
+            <p className="text-sm text-gray-400">Nenhum log anexado a este erro.</p>
+          ) : (
+            <div className="space-y-4">
+              {logsModal.items.map((lg, i) => (
+                <div key={lg.id ?? i} className="border border-gray-700 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-gray-900/60 text-xs text-gray-400">
+                    <span>Log {i + 1}{lg.created_at ? ` · ${lg.created_at}` : ''}</span>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard?.writeText(lg.content || '')}
+                      className="hover:text-gray-200 transition-colors"
+                      title="Copiar este log"
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-words font-mono text-xs text-gray-300 p-3 leading-relaxed">
+                    {lg.content || '—'}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </DetailModal>
+      )}
     </div>
   );
 }
