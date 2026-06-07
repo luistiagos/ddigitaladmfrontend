@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert } from 'lucide-react';
+import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert, Store } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '@/services/api';
 import { formatCurrency, todayISO } from '@/utils/format';
@@ -260,7 +260,63 @@ export default function Dashboard() {
 
         </div>
       </div>
+
+      {/* Vendas por Loja */}
+      <div className="mt-6">
+        <SectionTitle>Vendas por Loja</SectionTitle>
+        {loadingStats ? (
+          <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-5 animate-pulse">
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="h-3 w-32 bg-gray-700 rounded" />
+                  <div className="h-3 w-16 bg-gray-700 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : !stats?.sales_by_store?.length ? (
+          <div className="bg-gray-800/40 border border-dashed border-gray-700 rounded-xl p-5 flex items-center gap-2 text-gray-500 text-sm">
+            <Store className="h-4 w-4 shrink-0" />
+            <span>Nenhuma venda registrada para este dia.</span>
+          </div>
+        ) : (
+          <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Loja</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Vendas</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Total Bruto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.sales_by_store.map((row, idx) => (
+                  <tr
+                    key={idx}
+                    className="border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 transition-colors"
+                  >
+                    <td className="px-5 py-3 text-gray-200">
+                      <span className="flex items-center gap-2">
+                        <Store className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                        {row.store_name}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <span className="inline-flex items-center justify-center min-w-7 h-6 rounded-full bg-green-500/15 text-green-400 text-xs font-bold px-2">
+                        {row.count}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right text-gray-200 font-medium">
+                      {formatCurrency(row.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
