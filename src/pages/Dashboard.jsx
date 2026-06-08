@@ -64,6 +64,8 @@ function SectionTitle({ children }) {
 
 export default function Dashboard() {
   const [date, setDate] = useState(todayISO);
+  const [selectedStoreId, setSelectedStoreId] = useState('');
+  const [storeOptions, setStoreOptions] = useState([]);
   const [stats, setStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [fbSpend, setFbSpend] = useState(null);
@@ -76,11 +78,21 @@ export default function Dashboard() {
   useEffect(() => {
     setLoadingStats(true);
     setStats(null);
-    api.get(`/admin/dashboard?date=${date}`)
-      .then((r) => setStats(r.data))
+    const params = new URLSearchParams({ date });
+    if (selectedStoreId) params.set('store_id', selectedStoreId);
+    api.get(`/admin/dashboard?${params}`)
+      .then((r) => {
+        const nextStats = r.data || {};
+        const nextStores = nextStats.stores_with_sales || [];
+        setStoreOptions(nextStores);
+        if (selectedStoreId && !nextStores.some((store) => String(store.store_id) === String(selectedStoreId))) {
+          setSelectedStoreId('');
+        }
+        setStats(nextStats);
+      })
       .catch(() => setStats(null))
       .finally(() => setLoadingStats(false));
-  }, [date]);
+  }, [date, selectedStoreId]);
 
   // Fetch Facebook Ads spend
   useEffect(() => {
@@ -110,21 +122,40 @@ export default function Dashboard() {
   const fbReady = metaOk && !loadingFb && !fbError;
   // Lucro com base no líquido (já descontadas as taxas do MP) menos despesas.
   const lucroBruto = hasExpenses && fbReady && stats !== null ? approvedNet - totalExpenses : null;
+  const selectedStore = storeOptions.find((store) => String(store.store_id) === String(selectedStoreId));
+  const isStoreDashboard = Boolean(selectedStoreId);
 
   return (
     <div>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-          <p className="text-sm text-gray-400 mt-1">Resumo financeiro do dia</p>
+          <h1 className="text-xl font-semibold text-white">
+            {isStoreDashboard ? `Dashboard - ${selectedStore?.store_name || 'Loja'}` : 'Dashboard'}
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">
+            {isStoreDashboard ? 'Resumo financeiro filtrado pela loja' : 'Resumo financeiro do dia'}
+          </p>
         </div>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="self-start bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
-        />
+        <div className="flex flex-col sm:flex-row gap-2 self-start">
+          <select
+            aria-label="Filtrar loja"
+            value={selectedStoreId}
+            onChange={(e) => setSelectedStoreId(e.target.value)}
+            className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          >
+            <option value="">Todos</option>
+            {storeOptions.map((store) => (
+              <option key={store.store_id} value={store.store_id}>{store.store_name}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          />
+        </div>
       </div>
 
       {/* Vendas — sempre visível */}
@@ -261,9 +292,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Vendas por Loja */}
+      {/* Vendas por Loja / Produtos */}
       <div className="mt-6">
-        <SectionTitle>Vendas por Loja</SectionTitle>
+        <SectionTitle>{isStoreDashboard ? 'Produtos' : 'Vendas por Loja'}</SectionTitle>
         {loadingStats ? (
           <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-5 animate-pulse">
             <div className="space-y-3">
@@ -275,6 +306,48 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+        ) : isStoreDashboard ? (
+          !stats?.sales_by_product?.length ? (
+            <div className="bg-gray-800/40 border border-dashed border-gray-700 rounded-xl p-5 flex items-center gap-2 text-gray-500 text-sm">
+              <ShoppingCart className="h-4 w-4 shrink-0" />
+              <span>Nenhum produto vendido para esta loja neste dia.</span>
+            </div>
+          ) : (
+            <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Produto</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Vendas</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Total Bruto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.sales_by_product.map((row, idx) => (
+                    <tr
+                      key={row.product_id ?? idx}
+                      className="border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 transition-colors"
+                    >
+                      <td className="px-5 py-3 text-gray-200">
+                        <span className="flex items-center gap-2">
+                          <ShoppingCart className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                          {row.product_name}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <span className="inline-flex items-center justify-center min-w-7 h-6 rounded-full bg-green-500/15 text-green-400 text-xs font-bold px-2">
+                          {row.count}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right text-gray-200 font-medium">
+                        {formatCurrency(row.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : !stats?.sales_by_store?.length ? (
           <div className="bg-gray-800/40 border border-dashed border-gray-700 rounded-xl p-5 flex items-center gap-2 text-gray-500 text-sm">
             <Store className="h-4 w-4 shrink-0" />
@@ -297,10 +370,16 @@ export default function Dashboard() {
                     className="border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 transition-colors"
                   >
                     <td className="px-5 py-3 text-gray-200">
-                      <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!row.store_id}
+                        onClick={() => row.store_id && setSelectedStoreId(String(row.store_id))}
+                        className="flex items-center gap-2 text-left hover:text-violet-300 disabled:hover:text-gray-200 disabled:cursor-default transition-colors"
+                        title={row.store_id ? 'Abrir dashboard desta loja' : undefined}
+                      >
                         <Store className="h-3.5 w-3.5 text-gray-500 shrink-0" />
                         {row.store_name}
-                      </span>
+                      </button>
                     </td>
                     <td className="px-5 py-3 text-right">
                       <span className="inline-flex items-center justify-center min-w-7 h-6 rounded-full bg-green-500/15 text-green-400 text-xs font-bold px-2">
