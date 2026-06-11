@@ -11,7 +11,7 @@ const PER_PAGE = 20;
 
 const ALL_STATUSES = [
   'approved', 'pending', 'create', 'in_process',
-  'payment_failed', 'reverted', 'refunded',
+  'payment_required', 'payment_failed', 'rejected', 'reverted', 'refunded',
   'charged_back', 'in_mediation', 'cancelled',
 ];
 
