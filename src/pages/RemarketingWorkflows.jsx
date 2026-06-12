@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, Eye, Activity } from 'lucide-react';
+import { Search, X, Eye, Activity, Trash2 } from 'lucide-react';
 import api from '@/services/api';
 import Badge from '@/components/ui/Badge';
 import AdminGrid from '@/components/ui/AdminGrid';
 import useAdminGrid from '@/utils/useAdminGrid';
 import { formatDateTime } from '@/utils/format';
 import WorkflowDetailModal from '@/modals/WorkflowDetailModal';
+import CleanupTestEmailModal from '@/modals/CleanupTestEmailModal';
 
 const PER_PAGE = 20;
 
@@ -54,6 +55,7 @@ export default function RemarketingWorkflows() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(null);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
   const { page, setPage, sortColumn, sortDirection, handleSort } = useAdminGrid({
     defaultSort: 'updated_at',
     defaultDir: 'desc',
@@ -198,13 +200,28 @@ export default function RemarketingWorkflows() {
           onChange={fetchData}
         />
       )}
+      {cleanupOpen && (
+        <CleanupTestEmailModal
+          onClose={() => setCleanupOpen(false)}
+          onDone={fetchData}
+        />
+      )}
 
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white flex items-center gap-2">
-          <Activity className="h-5 w-5 text-violet-400" />
-          Workflows de Remarketing
-        </h1>
-        <p className="text-sm text-gray-400 mt-1">Monitor em tempo real dos disparos automáticos por lead.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-white flex items-center gap-2">
+            <Activity className="h-5 w-5 text-violet-400" />
+            Workflows de Remarketing
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">Monitor em tempo real dos disparos automáticos por lead.</p>
+        </div>
+        <button
+          onClick={() => setCleanupOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors shrink-0"
+        >
+          <Trash2 className="h-4 w-4 text-red-400" />
+          Limpar email de teste
+        </button>
       </div>
 
       <form onSubmit={applyFilters} className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6">
