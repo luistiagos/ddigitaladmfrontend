@@ -114,7 +114,7 @@ export default function Dashboard() {
     const { meta_access_token, meta_ad_account_id } = getSettings();
     const range = encodeURIComponent(JSON.stringify({ since: startDate, until: endDate }));
     fetch(
-      `https://graph.facebook.com/v19.0/act_${meta_ad_account_id}/insights?fields=spend&time_range=${range}&access_token=${meta_access_token}`
+      `https://graph.facebook.com/v22.0/act_${meta_ad_account_id}/insights?fields=spend&time_range=${range}&level=account&access_token=${meta_access_token}`
     )
       .then((r) => r.json())
       .then((data) => {
