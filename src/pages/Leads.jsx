@@ -7,6 +7,16 @@ import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import useAdminGrid from '@/utils/useAdminGrid';
 import { formatDateTime, todayISO } from '@/utils/format';
 import LeadDetailModal from '@/modals/LeadDetailModal';
+import WorkflowDetailModal from '@/modals/WorkflowDetailModal';
+
+function workflowStatusVariant(status) {
+  const s = (status || '').toLowerCase();
+  if (['purchased', 'completed'].includes(s)) return 'green';
+  if (['failed', 'canceled', 'cancelled'].includes(s)) return 'red';
+  if (['paused', 'waiting_manual_review', 'waiting'].includes(s)) return 'yellow';
+  if (['running', 'dispatching', 'started', 'submitted', 'already_started', 'starting'].includes(s)) return 'blue';
+  return 'gray';
+}
 
 const PER_PAGE = 20;
 const getEmptyFilters = () => ({
@@ -27,6 +37,7 @@ export default function Leads() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedLead, setSelectedLead] = useState(null);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(null);
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'dttime', defaultDir: 'desc' });
 
@@ -90,6 +101,19 @@ export default function Leads() {
       csvValue: r => r.status ?? '',
     },
     {
+      key: 'workflow', label: 'Workflow', sortable: false,
+      render: r => r.workflow_id ? (
+        <button
+          onClick={() => setSelectedWorkflowId(r.workflow_id)}
+          title={r.workflow_id}
+          className="cursor-pointer"
+        >
+          <Badge variant={workflowStatusVariant(r.workflow_status)}>{r.workflow_status || '—'}</Badge>
+        </button>
+      ) : <span className="text-gray-600 text-xs">—</span>,
+      csvValue: r => r.workflow_id ?? '',
+    },
+    {
       key: 'actions', label: 'Ações', sortable: false,
       render: r => (
         <button
@@ -110,6 +134,13 @@ export default function Leads() {
           lead={selectedLead}
           onClose={() => setSelectedLead(null)}
           onSaveSuccess={fetchData}
+        />
+      )}
+      {selectedWorkflowId && (
+        <WorkflowDetailModal
+          workflowId={selectedWorkflowId}
+          onClose={() => setSelectedWorkflowId(null)}
+          onChange={fetchData}
         />
       )}
       <div className="mb-6">
