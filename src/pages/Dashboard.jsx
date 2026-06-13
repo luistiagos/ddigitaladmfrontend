@@ -63,7 +63,8 @@ function SectionTitle({ children }) {
 }
 
 export default function Dashboard() {
-  const [date, setDate] = useState(todayISO);
+  const [startDate, setStartDate] = useState(todayISO);
+  const [endDate, setEndDate] = useState(todayISO);
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [storeOptions, setStoreOptions] = useState([]);
   const [stats, setStats] = useState(null);
@@ -74,11 +75,21 @@ export default function Dashboard() {
 
   const metaOk = hasProvider('meta');
 
+  // Garantir que endDate nunca fique antes de startDate
+  function handleStartDate(val) {
+    setStartDate(val);
+    if (endDate < val) setEndDate(val);
+  }
+  function handleEndDate(val) {
+    setEndDate(val);
+    if (startDate > val) setStartDate(val);
+  }
+
   // Fetch DB stats
   useEffect(() => {
     setLoadingStats(true);
     setStats(null);
-    const params = new URLSearchParams({ date });
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
     if (selectedStoreId) params.set('store_id', selectedStoreId);
     api.get(`/admin/dashboard?${params}`)
       .then((r) => {
@@ -92,7 +103,7 @@ export default function Dashboard() {
       })
       .catch(() => setStats(null))
       .finally(() => setLoadingStats(false));
-  }, [date, selectedStoreId]);
+  }, [startDate, endDate, selectedStoreId]);
 
   // Fetch Facebook Ads spend
   useEffect(() => {
@@ -101,7 +112,7 @@ export default function Dashboard() {
     setFbSpend(null);
     setFbError('');
     const { meta_access_token, meta_ad_account_id } = getSettings();
-    const range = encodeURIComponent(JSON.stringify({ since: date, until: date }));
+    const range = encodeURIComponent(JSON.stringify({ since: startDate, until: endDate }));
     fetch(
       `https://graph.facebook.com/v19.0/act_${meta_ad_account_id}/insights?fields=spend&time_range=${range}&access_token=${meta_access_token}`
     )
@@ -112,7 +123,7 @@ export default function Dashboard() {
       })
       .catch((e) => setFbError(e.message || 'Erro ao buscar dados do Meta'))
       .finally(() => setLoadingFb(false));
-  }, [date, metaOk]);
+  }, [startDate, endDate, metaOk]);
 
   const approvedTotal = stats?.approved_total || 0;                       // bruto
   const approvedNet = stats?.approved_total_net ?? stats?.approved_total ?? 0; // líquido
@@ -124,6 +135,7 @@ export default function Dashboard() {
   const lucroBruto = hasExpenses && fbReady && stats !== null ? approvedNet - totalExpenses : null;
   const selectedStore = storeOptions.find((store) => String(store.store_id) === String(selectedStoreId));
   const isStoreDashboard = Boolean(selectedStoreId);
+  const isSingleDay = startDate === endDate;
 
   return (
     <div>
@@ -134,7 +146,9 @@ export default function Dashboard() {
             {isStoreDashboard ? `Dashboard - ${selectedStore?.store_name || 'Loja'}` : 'Dashboard'}
           </h1>
           <p className="text-sm text-gray-400 mt-1">
-            {isStoreDashboard ? 'Resumo financeiro filtrado pela loja' : 'Resumo financeiro do dia'}
+            {isStoreDashboard
+              ? 'Resumo financeiro filtrado pela loja'
+              : isSingleDay ? 'Resumo financeiro do dia' : 'Resumo financeiro do período'}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 self-start">
@@ -149,12 +163,23 @@ export default function Dashboard() {
               <option key={store.store_id} value={store.store_id}>{store.store_name}</option>
             ))}
           </select>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
-          />
+          <div className="flex items-center gap-1">
+            <input
+              type="date"
+              value={startDate}
+              max={endDate}
+              onChange={(e) => handleStartDate(e.target.value)}
+              className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+            />
+            <span className="text-gray-500 text-sm">até</span>
+            <input
+              type="date"
+              value={endDate}
+              min={startDate}
+              onChange={(e) => handleEndDate(e.target.value)}
+              className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+            />
+          </div>
         </div>
       </div>
 
@@ -310,7 +335,7 @@ export default function Dashboard() {
           !stats?.sales_by_product?.length ? (
             <div className="bg-gray-800/40 border border-dashed border-gray-700 rounded-xl p-5 flex items-center gap-2 text-gray-500 text-sm">
               <ShoppingCart className="h-4 w-4 shrink-0" />
-              <span>Nenhum produto vendido para esta loja neste dia.</span>
+              <span>Nenhum produto vendido para esta loja neste período.</span>
             </div>
           ) : (
             <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
@@ -351,7 +376,7 @@ export default function Dashboard() {
         ) : !stats?.sales_by_store?.length ? (
           <div className="bg-gray-800/40 border border-dashed border-gray-700 rounded-xl p-5 flex items-center gap-2 text-gray-500 text-sm">
             <Store className="h-4 w-4 shrink-0" />
-            <span>Nenhuma venda registrada para este dia.</span>
+            <span>Nenhuma venda registrada para este período.</span>
           </div>
         ) : (
           <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
