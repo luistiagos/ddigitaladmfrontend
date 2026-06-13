@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, Mail, MessageCircle, Loader2, CreditCard } from 'lucide-react';
+import { Search, X, Mail, MessageCircle, Loader2, CreditCard, Facebook, Users, Globe } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import AdminGrid from '@/components/ui/AdminGrid';
@@ -168,6 +168,11 @@ export default function Sales() {
       csvValue: r => r.status ?? '',
     },
     {
+      key: 'lead_source', label: 'Canal',
+      render: r => <LeadSourceBadge row={r} />,
+      csvValue: r => r.is_facebook ? 'Facebook' : r.is_existing_customer ? 'Cliente' : 'Orgânico',
+    },
+    {
       key: 'provider', label: 'Origem',
       render: r => {
         const p = getProvider(r);
@@ -299,6 +304,28 @@ export default function Sales() {
   );
 }
 
+function LeadSourceBadge({ row }) {
+  if (row.is_facebook) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium text-blue-400 bg-blue-500/10 ring-1 ring-blue-500/30 whitespace-nowrap">
+        <Facebook className="h-3 w-3" />Facebook
+      </span>
+    );
+  }
+  if (row.is_existing_customer) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium text-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-500/30 whitespace-nowrap">
+        <Users className="h-3 w-3" />Cliente
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium text-gray-400 bg-gray-500/10 ring-1 ring-gray-500/20 whitespace-nowrap">
+      <Globe className="h-3 w-3" />Orgânico
+    </span>
+  );
+}
+
 function ProviderDetailModal({ row, onClose }) {
   const provider = getProvider(row);
   const isStripe = provider === 'stripe';
@@ -322,6 +349,8 @@ function ProviderDetailModal({ row, onClose }) {
     { label: 'Cidade / Estado', value: [row.cidade, row.uf_nome || row.uf].filter(Boolean).join(' — ') || null },
     { label: 'CEP', value: row.zipcode },
     { label: 'Campanha', value: row.campaign },
+    { label: 'FB Browser ID (fbp)', value: row.fbp },
+    { label: 'FB Click ID (fbc)', value: row.fbc },
   ].filter(Boolean).filter((f) => f.value != null && f.value !== '');
 
   return (
