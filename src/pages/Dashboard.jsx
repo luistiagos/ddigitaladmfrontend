@@ -3,7 +3,6 @@ import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign
 import { Link } from 'react-router-dom';
 import api from '@/services/api';
 import { formatCurrency, todayISO } from '@/utils/format';
-import { getSettings, hasProvider } from '@/utils/settings';
 
 const COLORS = {
   violet: 'text-violet-400 bg-violet-500/10',
@@ -73,7 +72,7 @@ export default function Dashboard() {
   const [loadingFb, setLoadingFb] = useState(true);
   const [fbError, setFbError] = useState('');
 
-  const metaOk = hasProvider('meta');
+  const [metaOk, setMetaOk] = useState(false);
 
   // Garantir que endDate nunca fique antes de startDate
   function handleStartDate(val) {
@@ -105,25 +104,27 @@ export default function Dashboard() {
       .finally(() => setLoadingStats(false));
   }, [startDate, endDate, selectedStoreId]);
 
-  // Fetch Facebook Ads spend
+  // Fetch Meta (Facebook Ads) spend via proxy do backend — o token fica no
+  // servidor (.env), nunca no navegador. metaOk é derivado da resposta.
   useEffect(() => {
-    if (!metaOk) { setFbSpend(null); setFbError(''); return; }
     setLoadingFb(true);
     setFbSpend(null);
     setFbError('');
-    const { meta_access_token, meta_ad_account_id } = getSettings();
-    const range = encodeURIComponent(JSON.stringify({ since: startDate, until: endDate }));
-    fetch(
-      `https://graph.facebook.com/v22.0/act_${meta_ad_account_id}/insights?fields=spend&time_range=${range}&level=account&access_token=${meta_access_token}`
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error.message);
-        setFbSpend(parseFloat(data.data?.[0]?.spend ?? '0'));
+    api.get(`/admin/meta/ad-spend?since=${startDate}&until=${endDate}`)
+      .then((r) => {
+        const data = r.data || {};
+        if (!data.configured) { setMetaOk(false); return; }
+        setMetaOk(true);
+        if (data.error) throw new Error(data.error);
+        setFbSpend(parseFloat(data.spend ?? 0));
       })
-      .catch((e) => setFbError(e.message || 'Erro ao buscar dados do Meta'))
+      .catch((e) => {
+        // Erro do Meta (502): provider configurado, mas a consulta falhou.
+        if (e.response?.data?.configured) setMetaOk(true);
+        setFbError(e.response?.data?.error || e.message || 'Erro ao buscar dados do Meta');
+      })
       .finally(() => setLoadingFb(false));
-  }, [startDate, endDate, metaOk]);
+  }, [startDate, endDate]);
 
   const approvedTotal = stats?.approved_total || 0;                       // bruto
   const approvedNet = stats?.approved_total_net ?? stats?.approved_total ?? 0; // líquido
@@ -256,32 +257,30 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
           {/* Facebook Ads */}
-          {metaOk ? (
-            loadingFb ? <SkeletonCard /> : (
-              fbError ? (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-5 flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <Megaphone className="h-4 w-4 text-red-400 shrink-0" />
-                    <span className="text-xs font-semibold text-red-400 uppercase tracking-wider">
-                      Meta Ads — Erro
-                    </span>
-                  </div>
-                  <p className="text-xs text-red-300 wrap-break-word">{fbError}</p>
-                  <Link to="/configuracoes" className="text-xs text-violet-400 hover:underline mt-1">
-                    Revisar configurações →
-                  </Link>
-                </div>
-              ) : (
-                <KpiCard
-                  icon={<Megaphone className="h-4 w-4" />}
-                  label="Gasto Facebook Ads"
-                  value={formatCurrency(fbSpend ?? 0)}
-                  color="blue"
-                />
-              )
-            )
-          ) : (
+          {loadingFb ? (
+            <SkeletonCard />
+          ) : !metaOk ? (
             <NotConfiguredCard label="Meta Ads" />
+          ) : fbError ? (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-5 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Megaphone className="h-4 w-4 text-red-400 shrink-0" />
+                <span className="text-xs font-semibold text-red-400 uppercase tracking-wider">
+                  Meta Ads — Erro
+                </span>
+              </div>
+              <p className="text-xs text-red-300 wrap-break-word">{fbError}</p>
+              <Link to="/configuracoes" className="text-xs text-violet-400 hover:underline mt-1">
+                Revisar configurações →
+              </Link>
+            </div>
+          ) : (
+            <KpiCard
+              icon={<Megaphone className="h-4 w-4" />}
+              label="Gasto Facebook Ads"
+              value={formatCurrency(fbSpend ?? 0)}
+              color="blue"
+            />
           )}
 
           {/* MercadoPago */}

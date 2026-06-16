@@ -1,94 +1,37 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, EyeOff, Save, CheckCircle, Settings2, MessageCircle, Power } from 'lucide-react';
+import { CheckCircle, Settings2, MessageCircle, Power, ShieldCheck } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
-import { getSettings, saveSettings, hasProvider } from '@/utils/settings';
 import api from '@/services/api';
 
+// Provedores de integração. Os SEGREDOS (tokens/secret keys) NÃO ficam mais no
+// navegador — vivem apenas no .env do servidor. Esta tela só exibe o status
+// (configurado ou não), lido de /admin/integrations/status.
 const PROVIDERS = [
   {
     key: 'meta',
     label: 'Meta (Facebook Ads)',
-    description: 'Busca o gasto diário com anúncios direto na Ads Insights API.',
+    description: 'Gasto diário com anúncios (Ads Insights), consultado pelo servidor.',
     accentColor: 'text-blue-400',
     borderColorActive: 'border-blue-500/30',
-    fields: [
-      {
-        id: 'meta_access_token',
-        label: 'Access Token',
-        placeholder: 'EAABsbCS...',
-        hint: 'Token com permissão ads_read — gere em Business Manager → Usuários do Sistema',
-        secret: true,
-      },
-      {
-        id: 'meta_ad_account_id',
-        label: 'Ad Account ID',
-        placeholder: '123456789',
-        hint: 'Apenas o número sem prefixo act_ — encontrado em Business Manager → Contas de Anúncio',
-        secret: false,
-      },
-    ],
+    envHint: 'META_ACCESS_TOKEN, META_AD_ACCOUNT_ID',
   },
   {
-    key: 'mp',
+    key: 'mercadopago',
     label: 'MercadoPago',
     description: 'Usado para calcular taxas de transações no Dashboard.',
     accentColor: 'text-cyan-400',
     borderColorActive: 'border-cyan-500/30',
-    fields: [
-      {
-        id: 'mp_access_token',
-        label: 'Access Token',
-        placeholder: 'APP_USR-...',
-        hint: 'Token de produção do MercadoPago',
-        secret: true,
-      },
-    ],
+    envHint: 'ACCESS_TOKEN',
   },
   {
     key: 'stripe',
     label: 'Stripe',
-    description: 'Integração com pagamentos Stripe para futuras funcionalidades.',
+    description: 'Integração com pagamentos Stripe.',
     accentColor: 'text-violet-400',
     borderColorActive: 'border-violet-500/30',
-    fields: [
-      {
-        id: 'stripe_api_key',
-        label: 'Secret Key',
-        placeholder: 'sk_live_...',
-        hint: 'Chave secreta de produção — Stripe Dashboard → Developers → API keys',
-        secret: true,
-      },
-    ],
+    envHint: 'STRIPE_API_KEY',
   },
 ];
-
-function TokenField({ field, value, onChange, showState, onToggleShow }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-400 mb-1.5">{field.label}</label>
-      <div className="relative">
-        <input
-          type={field.secret && !showState ? 'password' : 'text'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder}
-          autoComplete="off"
-          className={`w-full rounded-lg bg-gray-700/50 border border-gray-600 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition ${field.secret ? 'pr-10' : ''}`}
-        />
-        {field.secret && (
-          <button
-            type="button"
-            onClick={onToggleShow}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition"
-          >
-            {showState ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        )}
-      </div>
-      {field.hint && <p className="text-xs text-gray-500 mt-1">{field.hint}</p>}
-    </div>
-  );
-}
 
 function Toggle({ checked, onChange, label, description, disabled }) {
   return (
@@ -217,31 +160,83 @@ function WhatsAppSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Seção de Integrações — status read-only (segredos ficam no servidor)
+// ---------------------------------------------------------------------------
+function IntegrationsSection() {
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/admin/integrations/status');
+      setStatus(data || {});
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao carregar status das integrações.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-violet-400 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Integrações de Provedores
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            As chaves e segredos ficam <strong>apenas no servidor</strong> (.env) — não são
+            mais armazenados no navegador. Esta tela mostra somente o status.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {PROVIDERS.map((provider) => {
+          const connected = !!status?.[provider.key];
+          return (
+            <div
+              key={provider.key}
+              className={`rounded-lg border px-4 py-3 flex items-center justify-between gap-4 transition-colors ${
+                connected ? provider.borderColorActive : 'border-gray-700'
+              }`}
+            >
+              <div>
+                <div className={`text-sm font-semibold ${provider.accentColor}`}>
+                  {provider.label}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">{provider.description}</div>
+                <div className="text-[11px] text-gray-600 mt-1">
+                  .env: <code>{provider.envHint}</code>
+                </div>
+              </div>
+              <Badge variant={loading ? 'gray' : connected ? 'green' : 'gray'}>
+                {loading ? 'Carregando…' : connected ? 'Configurado' : 'Não configurado'}
+              </Badge>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Página principal
 // ---------------------------------------------------------------------------
 export default function Settings() {
-  const [form, setForm] = useState(getSettings);
-  const [show, setShow] = useState({});
-  const [saved, setSaved] = useState(false);
-  const savedTimerRef = useRef(null);
-
-  useEffect(() => () => { clearTimeout(savedTimerRef.current); }, []);
-
-  function toggleShow(id) {
-    setShow((s) => ({ ...s, [id]: !s[id] }));
-  }
-
-  function setField(id, value) {
-    setForm((f) => ({ ...f, [id]: value }));
-  }
-
-  function handleSave() {
-    saveSettings(form);
-    setSaved(true);
-    clearTimeout(savedTimerRef.current);
-    savedTimerRef.current = setTimeout(() => setSaved(false), 3000);
-  }
-
   return (
     <div>
       <div className="mb-6">
@@ -250,74 +245,13 @@ export default function Settings() {
           Configurações de Integrações
         </h1>
         <p className="text-sm text-gray-400 mt-1">
-          Tokens e chaves salvas localmente no navegador. Setados uma única vez.
+          Status das integrações. Os segredos ficam no servidor (.env), nunca no navegador.
         </p>
       </div>
 
       <div className="space-y-5">
-        {/* ---------------------------------------------------------------- */}
-        {/* Seção: WhatsApp — flag de envio do link de acesso                */}
-        {/* ---------------------------------------------------------------- */}
         <WhatsAppSection />
-
-        {/* ---------------------------------------------------------------- */}
-        {/* Provedores de integração (tokens salvos em localStorage)         */}
-        {/* ---------------------------------------------------------------- */}
-        {PROVIDERS.map((provider) => {
-          const connected = hasProvider(provider.key);
-          return (
-            <div
-              key={provider.key}
-              className={`bg-gray-800/60 border rounded-xl p-6 transition-colors ${
-                connected ? provider.borderColorActive : 'border-gray-700'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-5">
-                <div>
-                  <h2 className={`text-base font-semibold ${provider.accentColor}`}>
-                    {provider.label}
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">{provider.description}</p>
-                </div>
-                <Badge variant={connected ? 'green' : 'gray'}>
-                  {connected ? 'Conectado' : 'Não configurado'}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {provider.fields.map((field) => (
-                  <TokenField
-                    key={field.id}
-                    field={field}
-                    value={form[field.id] || ''}
-                    onChange={(v) => setField(field.id, v)}
-                    showState={show[field.id]}
-                    onToggleShow={() => toggleShow(field.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-6 flex items-center gap-3">
-        <button
-          onClick={handleSave}
-          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-            saved
-              ? 'bg-green-600 text-white'
-              : 'bg-violet-600 hover:bg-violet-500 text-white'
-          }`}
-        >
-          {saved ? <CheckCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {saved ? 'Salvo com sucesso!' : 'Salvar configurações'}
-        </button>
-        {saved && (
-          <span className="text-xs text-gray-400">
-            Navegue até o Dashboard para ver as mudanças aplicadas.
-          </span>
-        )}
+        <IntegrationsSection />
       </div>
     </div>
   );
