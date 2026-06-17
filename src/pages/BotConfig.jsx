@@ -43,6 +43,7 @@ export default function BotConfig() {
   const [webhookStatus, setWebhookStatus] = useState(null);
   const [webhookChecking, setWebhookChecking] = useState(false);
   const [webhookFixing, setWebhookFixing] = useState(false);
+  const [webhookMessage, setWebhookMessage] = useState(null);
 
   useEffect(() => {
     api.get('/admin/wpp/bot_status')
@@ -51,31 +52,42 @@ export default function BotConfig() {
     checkWebhook();
   }, []);
 
-  async function checkWebhook() {
+  async function checkWebhook({ clearMessage = true } = {}) {
     setWebhookChecking(true);
     try {
       const res = await api.get('/admin/whatsapp/webhook');
       setWebhookStatus(res.data);
+      if (clearMessage) setWebhookMessage(null);
     } catch (err) {
       console.error('Erro ao verificar webhook:', err);
+      setWebhookMessage({ type: 'error', text: 'Erro ao verificar o webhook.' });
     } finally {
       setWebhookChecking(false);
     }
   }
 
   async function fixWebhook() {
-    if (!confirm('Deseja reconfigurar o webhook da Evolution API?')) return;
+    if (!confirm('Deseja reiniciar o webhook da Evolution API e reconciliar mensagens recentes?')) return;
     setWebhookFixing(true);
+    setWebhookMessage(null);
     try {
-      const res = await api.post('/admin/whatsapp/webhook/fix');
+      const res = await api.post('/admin/whatsapp/webhook/restart');
       if (res.data.ok) {
-        alert('Webhook reconfigurado com sucesso!');
-        await checkWebhook();
+        setWebhookMessage({
+          type: 'success',
+          text: res.data.reconcile_started
+            ? 'Webhook reiniciado. Reconciliação das mensagens recentes foi iniciada.'
+            : 'Webhook reiniciado. A reconciliação não iniciou porque já pode haver outra em andamento.',
+        });
+        await checkWebhook({ clearMessage: false });
       } else {
-        alert('Falha ao reconfigurar: ' + (res.data.error || 'Erro desconhecido'));
+        setWebhookMessage({ type: 'error', text: res.data.error || 'Falha ao reiniciar webhook.' });
       }
     } catch (err) {
-      alert('Erro na requisição: ' + err.message);
+      setWebhookMessage({
+        type: 'error',
+        text: err.response?.data?.error || err.message || 'Erro ao reiniciar webhook.',
+      });
     } finally {
       setWebhookFixing(false);
     }
@@ -222,7 +234,7 @@ export default function BotConfig() {
 
         {/* ── Status do Webhook ── */}
         <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
             <div>
               <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-1">
                 <Webhook className="h-4 w-4 text-cyan-400" />
@@ -232,19 +244,38 @@ export default function BotConfig() {
                 Verifique se o WhatsApp está conectado e se o webhook está recebendo mensagens.
               </p>
             </div>
-            <button
-              onClick={checkWebhook}
-              disabled={webhookChecking}
-              className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition"
-              title="Atualizar status"
-            >
-              <RefreshCw className={`h-4 w-4 ${webhookChecking ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={checkWebhook}
+                disabled={webhookChecking || webhookFixing}
+                className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 transition"
+                title="Atualizar status"
+              >
+                <RefreshCw className={`h-4 w-4 ${webhookChecking ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                onClick={fixWebhook}
+                disabled={webhookFixing}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition"
+              >
+                {webhookFixing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Webhook className="h-3.5 w-3.5" />}
+                {webhookFixing ? 'Reiniciando...' : 'Reiniciar webhook'}
+              </button>
+            </div>
           </div>
 
           {!webhookStatus ? (
             <div className="text-sm text-gray-400 flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Carregando status...
+              {webhookChecking ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando status...
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-red-400" />
+                  {webhookMessage?.text || 'Status indisponível. Tente atualizar ou reiniciar o webhook.'}
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -292,6 +323,16 @@ export default function BotConfig() {
                   )}
                 </div>
               </div>
+
+              {webhookMessage && (
+                <div className={`rounded-lg border px-3 py-2 text-xs ${
+                  webhookMessage.type === 'success'
+                    ? 'border-green-500/30 bg-green-500/10 text-green-300'
+                    : 'border-red-500/30 bg-red-500/10 text-red-300'
+                }`}>
+                  {webhookMessage.text}
+                </div>
+              )}
 
               {webhookStatus.last_db_message && (
                 <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">

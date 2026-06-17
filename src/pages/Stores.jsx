@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package, GripVertical, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package, GripVertical, Copy, MessageSquare, Star } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
@@ -508,10 +508,379 @@ function StorePackagesModal({ store, onClose }) {
 }
 
 // ---------------------------------------------------------------------------
+// StoreTestimonialsModal  manage comments/testimonials linked to a store
+// ---------------------------------------------------------------------------
+
+function StoreTestimonialsModal({ store, onClose }) {
+  const [testimonials, setTestimonials] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Form state for individual testimonial (add/edit)
+  const [editingIndex, setEditingIndex] = useState(null); // null if adding new
+  const [form, setForm] = useState({ name: '', stars: 5, text: '' });
+
+  // Bulk JSON state
+  const [jsonText, setJsonText] = useState('');
+  const [jsonError, setJsonError] = useState('');
+  const [showJsonImport, setShowJsonImport] = useState(false);
+
+  useEffect(() => {
+    if (store.checkout_testimonials) {
+      try {
+        const parsed = JSON.parse(store.checkout_testimonials);
+        if (Array.isArray(parsed)) {
+          setTestimonials(parsed);
+        } else {
+          setTestimonials([]);
+        }
+      } catch (e) {
+        console.error("Erro ao fazer parse dos depoimentos:", e);
+        setTestimonials([]);
+      }
+    } else {
+      setTestimonials([]);
+    }
+    setLoading(false);
+  }, [store]);
+
+  // Handle individual testimonial submit (add or update)
+  function handleFormSubmit(e) {
+    e.preventDefault();
+    setError('');
+    const name = form.name.trim();
+    const text = form.text.trim();
+    if (!name || !text) {
+      setError('Nome e texto são obrigatórios.');
+      return;
+    }
+
+    const updated = [...testimonials];
+    const item = { name, stars: Number(form.stars), text };
+
+    if (editingIndex !== null) {
+      updated[editingIndex] = item;
+      setEditingIndex(null);
+    } else {
+      updated.push(item);
+    }
+
+    setTestimonials(updated);
+    setForm({ name: '', stars: 5, text: '' });
+  }
+
+  // Edit testimonial
+  function startEdit(idx) {
+    const t = testimonials[idx];
+    setEditingIndex(idx);
+    setForm({ name: t.name, stars: t.stars, text: t.text });
+  }
+
+  // Delete testimonial
+  function handleDelete(idx) {
+    const updated = testimonials.filter((_, i) => i !== idx);
+    setTestimonials(updated);
+    if (editingIndex === idx) {
+      setEditingIndex(null);
+      setForm({ name: '', stars: 5, text: '' });
+    }
+  }
+
+  // JSON import validation and processing
+  function handleJsonImport() {
+    setJsonError('');
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed)) {
+        setJsonError('O JSON deve ser um array de depoimentos.');
+        return;
+      }
+      // Validate schema
+      for (let i = 0; i < parsed.length; i++) {
+        const item = parsed[i];
+        if (!item.name || typeof item.name !== 'string') {
+          setJsonError(`Item na posição ${i} está sem o campo "name" (ou não é texto).`);
+          return;
+        }
+        if (item.stars === undefined || isNaN(Number(item.stars))) {
+          setJsonError(`Item na posição ${i} está sem o campo "stars" (ou não é um número).`);
+          return;
+        }
+        if (!item.text || typeof item.text !== 'string') {
+          setJsonError(`Item na posição ${i} está sem o campo "text" (ou não é texto).`);
+          return;
+        }
+      }
+
+      setTestimonials(parsed.map(item => ({
+        name: item.name.trim(),
+        stars: Math.min(5, Math.max(1, Number(item.stars))),
+        text: item.text.trim()
+      })));
+      setJsonText('');
+      setShowJsonImport(false);
+    } catch (e) {
+      setJsonError('JSON inválido: ' + e.message);
+    }
+  }
+
+  // Save all to database
+  async function handleSaveAll() {
+    setSaving(true);
+    setError('');
+    try {
+      const payload = {
+        name: store.name,
+        url_thumb: store.url_thumb || null,
+        url_checkout: store.url_checkout || null,
+        url_page: store.url_page || null,
+        checkout_features: store.checkout_features || null,
+        checkout_theme_color: store.checkout_theme_color || null,
+        checkout_whatsapp_text: store.checkout_whatsapp_text || null,
+        checkout_headline_price: store.checkout_headline_price || null,
+        checkout_testimonials: JSON.stringify(testimonials)
+      };
+      await api.put(`/admin/stores/${store.id}`, payload);
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao salvar depoimentos.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = 'w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-violet-500 placeholder-gray-500';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+      <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+          <h2 className="font-semibold text-white flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-emerald-400" />
+            Depoimentos — {store.name}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+          {loading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+            </div>
+          )}
+
+          {!loading && (
+            <>
+              {/* Form Section */}
+              <form onSubmit={handleFormSubmit} className="border border-gray-700 bg-gray-750/50 rounded-xl p-4 space-y-3">
+                <h3 className="text-sm font-medium text-white">
+                  {editingIndex !== null ? 'Editar Depoimento' : 'Adicionar Depoimento'}
+                </h3>
+                
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs text-gray-400 mb-1">Nome do Cliente *</label>
+                    <input
+                      type="text"
+                      value={form.name}
+                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="Ex: Gabriel S."
+                      className={inputCls}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Estrelas (1-5)</label>
+                    <select
+                      value={form.stars}
+                      onChange={e => setForm(f => ({ ...f, stars: Number(e.target.value) }))}
+                      className={inputCls}
+                    >
+                      <option value="5">★★★★★ (5)</option>
+                      <option value="4">★★★★☆ (4)</option>
+                      <option value="3">★★★☆☆ (3)</option>
+                      <option value="2">★★☆☆☆ (2)</option>
+                      <option value="1">★☆☆☆☆ (1)</option>
+                    </select>
+                  </div>
+                  <div className="col-span-3">
+                    <label className="block text-xs text-gray-400 mb-1">Texto do Comentário *</label>
+                    <textarea
+                      rows={3}
+                      value={form.text}
+                      onChange={e => setForm(f => ({ ...f, text: e.target.value }))}
+                      placeholder="Excelente produto! Valeu cada centavo..."
+                      className={inputCls}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {error && <p className="text-xs text-red-400">{error}</p>}
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                  >
+                    {editingIndex !== null ? 'Atualizar' : 'Adicionar ao Checkout'}
+                  </button>
+                  {editingIndex !== null && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingIndex(null);
+                        setForm({ name: '', stars: 5, text: '' });
+                      }}
+                      className="text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                    >
+                      Cancelar Edição
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              {/* Import JSON Section Toggle */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowJsonImport(!showJsonImport)}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors underline"
+                >
+                  {showJsonImport ? 'Ocultar Importação JSON' : 'Importar Depoimentos via JSON'}
+                </button>
+              </div>
+
+              {showJsonImport && (
+                <div className="border border-emerald-500/20 bg-gray-750/30 rounded-xl p-4 space-y-3">
+                  <h3 className="text-sm font-medium text-white">Importar Lista JSON</h3>
+                  <p className="text-[11px] text-gray-500 leading-tight">
+                    Cole um array no formato: <code className="bg-gray-900 px-1 py-0.5 rounded text-emerald-300">{'[{"name": "Fulano", "stars": 5, "text": "Muito bom"}]'}</code>.
+                    Isso irá substituir todos os depoimentos da lista abaixo ao confirmar.
+                  </p>
+                  <textarea
+                    rows={4}
+                    value={jsonText}
+                    onChange={e => setJsonText(e.target.value)}
+                    placeholder='[{"name": "Gabriel S.", "stars": 5, "text": "Excelente!"}]'
+                    className={`${inputCls} font-mono text-xs`}
+                  />
+                  {jsonError && <p className="text-xs text-red-400">{jsonError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleJsonImport}
+                      className="text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                    >
+                      Processar JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowJsonImport(false);
+                        setJsonText('');
+                        setJsonError('');
+                      }}
+                      className="text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Testimonials List */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-white flex justify-between items-center">
+                  <span>Lista de Depoimentos ({testimonials.length})</span>
+                  {testimonials.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(testimonials, null, 2));
+                        alert('JSON de depoimentos copiado para a área de transferência!');
+                      }}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 font-normal underline"
+                    >
+                      Copiar JSON Completo
+                    </button>
+                  )}
+                </h3>
+
+                {testimonials.length === 0 ? (
+                  <p className="text-gray-500 text-xs text-center py-6">Nenhum depoimento cadastrado. O checkout usará os comentários padrão.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {testimonials.map((t, idx) => (
+                      <div key={idx} className="flex justify-between items-start gap-4 p-3 bg-gray-700/30 border border-gray-700/60 rounded-xl">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-white text-xs">{t.name}</span>
+                            <span className="text-yellow-400 text-xs font-mono">
+                              {'★'.repeat(t.stars) + '☆'.repeat(5 - t.stars)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-300 mt-1 leading-relaxed whitespace-pre-wrap">{t.text}</p>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(idx)}
+                            className="p-1 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(idx)}
+                            className="p-1 rounded-md bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-700 shrink-0 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSaveAll}
+            disabled={saving || loading}
+            className="inline-flex items-center justify-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-60 transition-colors"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Salvar no Banco
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Stores page
 // ---------------------------------------------------------------------------
 
 const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '' };
+
 
 export default function Stores() {
   const [stores, setStores] = useState([]);
@@ -531,6 +900,7 @@ export default function Stores() {
   const [copying, setCopying] = useState(null);
 
   const [pkgStore, setPkgStore] = useState(null);
+  const [testimonialsStore, setTestimonialsStore] = useState(null);
 
   const fetchStores = useCallback(async () => {
     setLoading(true);
@@ -706,6 +1076,12 @@ export default function Stores() {
                 >
                   <Package className="h-3.5 w-3.5" /> Gerenciar Produtos
                 </button>
+                <button
+                  onClick={() => setTestimonialsStore(s)}
+                  className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 transition-colors"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" /> Gerenciar Depoimentos
+                </button>
                 <div className="flex gap-2">
                   <button
                     onClick={() => openEdit(s)}
@@ -879,6 +1255,10 @@ export default function Stores() {
 
       {pkgStore && (
         <StorePackagesModal store={pkgStore} onClose={() => setPkgStore(null)} />
+      )}
+
+      {testimonialsStore && (
+        <StoreTestimonialsModal store={testimonialsStore} onClose={() => { setTestimonialsStore(null); fetchStores(); }} />
       )}
 
       {toDelete && (
