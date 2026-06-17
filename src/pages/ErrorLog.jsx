@@ -10,17 +10,13 @@ const PER_PAGE = 20;
 
 const EMPTY_FILTERS = { file: '', method: '', project: '', start_date: '', end_date: '' };
 
-const KNOWN_PROJECTS = [
-  'emuladores.github.io',
-  'digitalmemberarea.digitalstoregames.com',
-];
-
 export default function ErrorLog() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
   const [data, setData]       = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+  const [projects, setProjects] = useState([]);
 
   // Modais: mensagem inteira e logs/stacktraces.
   const [msgModal, setMsgModal]   = useState(null);   // { title, text } | null
@@ -64,6 +60,12 @@ export default function ErrorLog() {
   }, [page, applied, sortColumn, sortDirection]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    api.get('/admin/errors/projects').then(res => {
+      setProjects(res.data?.projects || []);
+    }).catch(() => {});
+  }, []);
 
   function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); }
   function clearFilters()  { setFilters(EMPTY_FILTERS); setApplied(EMPTY_FILTERS); setPage(1); }
@@ -193,7 +195,7 @@ export default function ErrorLog() {
               className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
             >
               <option value="">Todos os projetos</option>
-              {KNOWN_PROJECTS.map(p => <option key={p} value={p}>{p}</option>)}
+              {projects.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
