@@ -6,15 +6,16 @@
  * duplication.
  *
  * Column definition shape:
- *   key          string        unique key; also the CSV/PDF fallback accessor (row[key])
- *   label        string        column header text
- *   sortable?    boolean       renders a clickable sort header
- *   isValueColumn? boolean     marks this column for the monetary sum in the footer
- *   render?      (row) => ReactNode   cell content — AdminGrid wraps it in <td>
- *   fullCell?    boolean       when true, render() must return the full <td> element
- *                              (used with EmailCell / PhoneCell which own their <td>)
- *   csvValue?    (row) => string      text for CSV/PDF export; falls back to row[key]
- *   className?   string        <td> className override
+ *   key           string        unique key; also the CSV/PDF fallback accessor (row[key])
+ *   label         string        column header text
+ *   sortable?     boolean       renders a clickable sort header
+ *   headerRender? () => ReactNode  custom header cell content (replaces label)
+ *   isValueColumn? boolean      marks this column for the monetary sum in the footer
+ *   render?       (row) => ReactNode   cell content — AdminGrid wraps it in <td>
+ *   fullCell?     boolean       when true, render() must return the full <td> element
+ *                               (used with EmailCell / PhoneCell which own their <td>)
+ *   csvValue?     (row) => string      text for CSV/PDF export; falls back to row[key]
+ *   className?    string        <td> className override
  */
 
 import { cloneElement } from 'react';
@@ -143,8 +144,9 @@ export default function AdminGrid({
           {/* ---- HEADER ---- */}
           <thead>
             <tr className="border-b border-gray-700">
-              {columns.map(col =>
-                col.sortable ? (
+              {columns.map(col => {
+                const headerContent = col.headerRender ? col.headerRender() : col.label;
+                return col.sortable ? (
                   <SortableTh
                     key={col.key}
                     column={col.key}
@@ -152,12 +154,12 @@ export default function AdminGrid({
                     sortDirection={sortDirection}
                     onSort={onSort}
                   >
-                    {col.label}
+                    {headerContent}
                   </SortableTh>
                 ) : (
-                  <Th key={col.key}>{col.label}</Th>
-                )
-              )}
+                  <Th key={col.key}>{headerContent}</Th>
+                );
+              })}
             </tr>
           </thead>
 

@@ -8,7 +8,7 @@ import useAdminGrid from '@/utils/useAdminGrid';
 
 const PER_PAGE = 20;
 
-const EMPTY_FILTERS = { file: '', method: '', project: '', start_date: '', end_date: '' };
+const EMPTY_FILTERS = { file: '', method: '', project: '', start_date: '', end_date: '', status: '' };
 
 export default function ErrorLog() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -22,6 +22,8 @@ export default function ErrorLog() {
   const [msgModal, setMsgModal]   = useState(null);   // { title, text } | null
   const [logsModal, setLogsModal] = useState(null);   // { id, items, loading, error } | null
   const [detailModal, setDetailModal] = useState(null); // row object | null
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [batchUpdating, setBatchUpdating] = useState(false);
 
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'time', defaultDir: 'desc' });
@@ -35,6 +37,21 @@ export default function ErrorLog() {
       setLogsModal({ id: row.id, items: [], loading: false, error: true });
     }
   }, []);
+
+  const handleBatchStatus = useCallback(async (status) => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setBatchUpdating(true);
+    try {
+      await api.put('/admin/errors/status', { ids, status });
+      setSelectedIds(new Set());
+      fetchData();
+    } catch {
+      // silent
+    } finally {
+      setBatchUpdating(false);
+    }
+  }, [selectedIds, fetchData]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -51,6 +68,7 @@ export default function ErrorLog() {
       if (applied.project)    params.set('project',    applied.project);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date)   params.set('end_date',   applied.end_date);
+      if (applied.status)     params.set('status',     applied.status);
       const res = await api.get(`/admin/errors?${params}`);
       setData({ items: res.data.items || [], total: res.data.total || 0 });
     } catch {
@@ -60,7 +78,10 @@ export default function ErrorLog() {
     }
   }, [page, applied, sortColumn, sortDirection]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    setSelectedIds(new Set());
+  }, [fetchData]);
 
   useEffect(() => {
     api.get('/admin/errors/projects').then(res => {
@@ -68,15 +89,61 @@ export default function ErrorLog() {
     }).catch(() => {});
   }, []);
 
-  function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); }
-  function clearFilters()  { setFilters(EMPTY_FILTERS); setApplied(EMPTY_FILTERS); setPage(1); }
+  function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); setSelectedIds(new Set()); }
+  function clearFilters()  { setFilters(EMPTY_FILTERS); setApplied(EMPTY_FILTERS); setPage(1); setSelectedIds(new Set()); }
+
+  const allSelected = data.items.length > 0 && selectedIds.size === data.items.length;
+
+  function handleSelectOne(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function handleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(data.items.map(r => r.id)));
+    }
+  }
 
   const columns = [
     {
-      key: 'id', label: 'ID', sortable: true,
-      className: 'px-4 py-3 text-gray-400 text-xs w-16',
-      render: r => r.id,
-      csvValue: r => r.id,
+      key: 'checkbox', label: '',
+      className: 'px-4 py-3 text-center w-12',
+      headerRender: () => (
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={handleSelectAll}
+          className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-violet-600 focus:ring-violet-500"
+        />
+      ),
+      render: r => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(r.id)}
+          onChange={() => handleSelectOne(r.id)}
+          className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-violet-600 focus:ring-violet-500"
+        />
+      ),
+    },
+    {
+      key: 'status', label: 'Status', sortable: true,
+      className: 'px-4 py-3 text-center w-24',
+      render: r => (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+          r.status === 'open'
+            ? 'bg-emerald-900/60 text-emerald-400'
+            : 'bg-gray-700 text-gray-400'
+        }`}>
+          {r.status === 'open' ? 'Aberto' : 'Fechado'}
+        </span>
+      ),
+      csvValue: r => r.status === 'open' ? 'Aberto' : 'Fechado',
     },
     {
       key: 'time', label: 'Data/Hora', sortable: true,
@@ -132,28 +199,6 @@ export default function ErrorLog() {
       className: 'px-4 py-3 text-gray-400 text-xs whitespace-nowrap',
       render: r => r.project || '—',
       csvValue: r => r.project ?? '',
-    },
-    {
-      key: 'platform', label: 'Plataforma',
-      className: 'px-4 py-3 text-gray-400 text-xs whitespace-nowrap',
-      render: r => r.platform || '—',
-      csvValue: r => r.platform ?? '',
-    },
-    {
-      key: 'page_url', label: 'Página',
-      className: 'px-4 py-3 text-gray-500 text-xs max-w-[180px]',
-      render: r => r.page_url ? (
-        <a
-          href={r.page_url}
-          target="_blank"
-          rel="noreferrer"
-          className="block truncate text-violet-400 hover:text-violet-300 transition-colors"
-          title={r.page_url}
-        >
-          {r.page_url}
-        </a>
-      ) : '—',
-      csvValue: r => r.page_url ?? '',
     },
     {
       key: 'visualizar', label: '',
@@ -218,6 +263,18 @@ export default function ErrorLog() {
             />
           </div>
           <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-500">Status</label>
+            <select
+              value={filters.status}
+              onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
+              className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+            >
+              <option value="">Todos</option>
+              <option value="open">Aberto</option>
+              <option value="close">Fechado</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-500">De</label>
             <input
               type="date"
@@ -250,6 +307,31 @@ export default function ErrorLog() {
           </button>
         </div>
       </form>
+
+      {/* Batch actions */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-xl">
+          <span className="text-sm text-gray-300">{selectedIds.size} selecionado(s)</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={batchUpdating}
+              onClick={() => handleBatchStatus('open')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white transition-colors"
+            >
+              Marcar como Aberto
+            </button>
+            <button
+              type="button"
+              disabled={batchUpdating}
+              onClick={() => handleBatchStatus('close')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white transition-colors"
+            >
+              Marcar como Fechado
+            </button>
+          </div>
+        </div>
+      )}
 
       <AdminGrid
         columns={columns}
@@ -321,6 +403,7 @@ export default function ErrorLog() {
         >
           <div className="space-y-3 text-sm">
             <DetailField label="ID" value={detailModal.id} />
+            <DetailField label="Status" value={detailModal.status === 'open' ? 'Aberto' : 'Fechado'} />
             <DetailField label="Data/Hora" value={formatDateTime(detailModal.time)} />
             <DetailField label="Arquivo" value={detailModal.file || '—'} />
             <DetailField label="Método" value={detailModal.method || '—'} />
