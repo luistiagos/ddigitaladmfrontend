@@ -21,6 +21,7 @@ export default function ErrorLog() {
   // Modais: mensagem inteira e logs/stacktraces.
   const [msgModal, setMsgModal]   = useState(null);   // { title, text } | null
   const [logsModal, setLogsModal] = useState(null);   // { id, items, loading, error } | null
+  const [detailModal, setDetailModal] = useState(null); // row object | null
 
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'time', defaultDir: 'desc' });
@@ -139,22 +140,6 @@ export default function ErrorLog() {
       csvValue: r => r.platform ?? '',
     },
     {
-      key: 'screen', label: 'Tela',
-      className: 'px-4 py-3 text-gray-400 text-xs whitespace-nowrap',
-      render: r => r.screen || '—',
-      csvValue: r => r.screen ?? '',
-    },
-    {
-      key: 'user_agent', label: 'User-Agent',
-      className: 'px-4 py-3 text-gray-500 text-xs max-w-[200px]',
-      render: r => (
-        <span className="block truncate" title={r.user_agent || ''}>
-          {r.user_agent || '—'}
-        </span>
-      ),
-      csvValue: r => r.user_agent ?? '',
-    },
-    {
       key: 'page_url', label: 'Página',
       className: 'px-4 py-3 text-gray-500 text-xs max-w-[180px]',
       render: r => r.page_url ? (
@@ -169,6 +154,20 @@ export default function ErrorLog() {
         </a>
       ) : '—',
       csvValue: r => r.page_url ?? '',
+    },
+    {
+      key: 'visualizar', label: '',
+      className: 'px-4 py-3 text-center w-16',
+      render: r => (
+        <button
+          type="button"
+          onClick={() => setDetailModal(r)}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-violet-600 hover:bg-violet-500 text-white transition-colors"
+          title="Visualizar detalhes completos"
+        >
+          Visualizar
+        </button>
+      ),
     },
   ];
 
@@ -312,6 +311,42 @@ export default function ErrorLog() {
             </div>
           )}
         </DetailModal>
+      )}
+
+      {/* Modal: detalhes completos */}
+      {detailModal && (
+        <DetailModal
+          title={`Erro #${detailModal.id}`}
+          onClose={() => setDetailModal(null)}
+        >
+          <div className="space-y-3 text-sm">
+            <DetailField label="ID" value={detailModal.id} />
+            <DetailField label="Data/Hora" value={formatDateTime(detailModal.time)} />
+            <DetailField label="Arquivo" value={detailModal.file || '—'} />
+            <DetailField label="Método" value={detailModal.method || '—'} />
+            <DetailField label="Mensagem" value={detailModal.message || '—'} mono />
+            <DetailField label="Projeto" value={detailModal.project || '—'} />
+            <DetailField label="Plataforma" value={detailModal.platform || '—'} />
+            <DetailField label="Tela" value={detailModal.screen || '—'} />
+            <DetailField label="User-Agent" value={detailModal.user_agent || '—'} />
+            <DetailField label="Página" value={detailModal.page_url || '—'} />
+          </div>
+        </DetailModal>
+      )}
+    </div>
+  );
+}
+
+function DetailField({ label, value, mono }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-gray-500 text-xs uppercase tracking-wider">{label}</span>
+      {mono ? (
+        <pre className="whitespace-pre-wrap break-words font-mono text-xs text-gray-200 leading-relaxed bg-gray-900/50 rounded-lg p-2 max-h-32 overflow-auto">
+          {value}
+        </pre>
+      ) : (
+        <span className="text-gray-200 break-words">{value}</span>
       )}
     </div>
   );
