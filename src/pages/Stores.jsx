@@ -1476,19 +1476,20 @@ export default function Stores() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+          <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
               <h2 className="font-semibold text-white flex items-center gap-2">
                 <Store className="h-4 w-4 text-violet-400" />
                 {editing ? 'Editar Store' : 'Nova Store'}
               </h2>
-              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-white transition-colors">
+              <button type="button" onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-white transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="px-6 py-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <form onSubmit={handleSave} className="flex flex-col min-h-0">
+              <div className="overflow-y-auto flex-1 px-6 py-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-gray-400 mb-1.5">Nome *</label>
                   <input
@@ -1625,62 +1626,71 @@ export default function Stores() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo Site Confiável</label>
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, checkout_trust_seal_siteconfiavel: f.checkout_trust_seal_siteconfiavel ? 0 : 1 }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_siteconfiavel ? 'bg-violet-600' : 'bg-gray-600'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_siteconfiavel ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                  <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_siteconfiavel ? 'Ativo' : 'Inativo'}</span>
+                <div className="md:col-span-2 grid grid-cols-3 gap-4 border-t border-gray-700 pt-4 mt-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo Site Confiável</label>
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, checkout_trust_seal_siteconfiavel: f.checkout_trust_seal_siteconfiavel ? 0 : 1 }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_siteconfiavel ? 'bg-violet-600' : 'bg-gray-600'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_siteconfiavel ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                      <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_siteconfiavel ? 'Ativo' : 'Inativo'}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo SSL</label>
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, checkout_trust_seal_ssl: f.checkout_trust_seal_ssl ? 0 : 1 }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_ssl ? 'bg-violet-600' : 'bg-gray-600'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_ssl ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                      <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_ssl ? 'Ativo' : 'Inativo'}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo Mercado Pago</label>
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, checkout_trust_seal_mercadopago: f.checkout_trust_seal_mercadopago ? 0 : 1 }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_mercadopago ? 'bg-violet-600' : 'bg-gray-600'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_mercadopago ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                      <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_mercadopago ? 'Ativo' : 'Inativo'}</span>
+                    </div>
+                  </div>
+                </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo SSL</label>
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, checkout_trust_seal_ssl: f.checkout_trust_seal_ssl ? 0 : 1 }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_ssl ? 'bg-violet-600' : 'bg-gray-600'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_ssl ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                  <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_ssl ? 'Ativo' : 'Inativo'}</span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo Mercado Pago</label>
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, checkout_trust_seal_mercadopago: f.checkout_trust_seal_mercadopago ? 0 : 1 }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_mercadopago ? 'bg-violet-600' : 'bg-gray-600'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_mercadopago ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                  <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_mercadopago ? 'Ativo' : 'Inativo'}</span>
-                </div>
+                {formError && (
+                  <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">{formError}</p>
+                )}
               </div>
 
-              {formError && (
-                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{formError}</p>
-              )}
-
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white text-sm rounded-lg transition-colors"
-                >
-                  {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {editing ? 'Salvar alterações' : 'Criar store'}
-                </button>
+              <div className="px-6 py-4 border-t border-gray-700 shrink-0 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
                 >
                   Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white text-sm rounded-lg transition-colors"
+                >
+                  {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {editing ? 'Salvar alterações' : 'Criar store'}
                 </button>
               </div>
             </form>
