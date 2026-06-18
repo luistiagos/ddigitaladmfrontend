@@ -38,21 +38,6 @@ export default function ErrorLog() {
     }
   }, []);
 
-  const handleBatchStatus = useCallback(async (status) => {
-    const ids = [...selectedIds];
-    if (!ids.length) return;
-    setBatchUpdating(true);
-    try {
-      await api.put('/admin/errors/status', { ids, status });
-      setSelectedIds(new Set());
-      fetchData();
-    } catch {
-      // silent
-    } finally {
-      setBatchUpdating(false);
-    }
-  }, [selectedIds, fetchData]);
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -77,6 +62,21 @@ export default function ErrorLog() {
       setLoading(false);
     }
   }, [page, applied, sortColumn, sortDirection]);
+
+  const handleBatchStatus = useCallback(async (status) => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setBatchUpdating(true);
+    try {
+      await api.put('/admin/errors/status', { ids, status });
+      setSelectedIds(new Set());
+      fetchData();
+    } catch {
+      // silent
+    } finally {
+      setBatchUpdating(false);
+    }
+  }, [selectedIds, fetchData]);
 
   useEffect(() => {
     fetchData();

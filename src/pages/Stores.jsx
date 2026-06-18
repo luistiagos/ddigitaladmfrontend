@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package, GripVertical, Copy, MessageSquare, Star } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader2, Store, ExternalLink, ImageOff, Package, GripVertical, Copy, MessageSquare, Star, HelpCircle } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
@@ -876,6 +876,341 @@ function StoreTestimonialsModal({ store, onClose }) {
 }
 
 // ---------------------------------------------------------------------------
+// StoreFaqModal  manage FAQ items linked to a store
+// ---------------------------------------------------------------------------
+
+function StoreFaqModal({ store, onClose }) {
+  const [faqItems, setFaqItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [form, setForm] = useState({ question: '', answer: '' });
+
+  const [jsonText, setJsonText] = useState('');
+  const [jsonError, setJsonError] = useState('');
+  const [showJsonImport, setShowJsonImport] = useState(false);
+
+  useEffect(() => {
+    if (store.checkout_faq) {
+      try {
+        const parsed = JSON.parse(store.checkout_faq);
+        if (Array.isArray(parsed)) {
+          setFaqItems(parsed);
+        } else {
+          setFaqItems([]);
+        }
+      } catch (e) {
+        console.error("Erro ao fazer parse do FAQ:", e);
+        setFaqItems([]);
+      }
+    } else {
+      setFaqItems([]);
+    }
+    setLoading(false);
+  }, [store]);
+
+  function handleFormSubmit(e) {
+    e.preventDefault();
+    setError('');
+    const question = form.question.trim();
+    const answer = form.answer.trim();
+    if (!question || !answer) {
+      setError('Pergunta e resposta são obrigatórios.');
+      return;
+    }
+
+    const updated = [...faqItems];
+    const item = { question, answer };
+
+    if (editingIndex !== null) {
+      updated[editingIndex] = item;
+      setEditingIndex(null);
+    } else {
+      updated.push(item);
+    }
+
+    setFaqItems(updated);
+    setForm({ question: '', answer: '' });
+  }
+
+  function startEdit(idx) {
+    const item = faqItems[idx];
+    setEditingIndex(idx);
+    setForm({ question: item.question, answer: item.answer });
+  }
+
+  function handleDelete(idx) {
+    const updated = faqItems.filter((_, i) => i !== idx);
+    setFaqItems(updated);
+    if (editingIndex === idx) {
+      setEditingIndex(null);
+      setForm({ question: '', answer: '' });
+    }
+  }
+
+  function handleJsonImport() {
+    setJsonError('');
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed)) {
+        setJsonError('O JSON deve ser um array de FAQ.');
+        return;
+      }
+      for (let i = 0; i < parsed.length; i++) {
+        const item = parsed[i];
+        if (!item.question || typeof item.question !== 'string') {
+          setJsonError(`Item na posição ${i} está sem o campo "question" (ou não é texto).`);
+          return;
+        }
+        if (!item.answer || typeof item.answer !== 'string') {
+          setJsonError(`Item na posição ${i} está sem o campo "answer" (ou não é texto).`);
+          return;
+        }
+      }
+
+      setFaqItems(parsed.map(item => ({
+        question: item.question.trim(),
+        answer: item.answer.trim()
+      })));
+      setJsonText('');
+      setShowJsonImport(false);
+    } catch (e) {
+      setJsonError('JSON inválido: ' + e.message);
+    }
+  }
+
+  async function handleSaveAll() {
+    setSaving(true);
+    setError('');
+    try {
+      const payload = {
+        name: store.name,
+        url_thumb: store.url_thumb || null,
+        url_checkout: store.url_checkout || null,
+        url_page: store.url_page || null,
+        checkout_features: store.checkout_features || null,
+        checkout_theme_color: store.checkout_theme_color || null,
+        checkout_whatsapp_text: store.checkout_whatsapp_text || null,
+        checkout_headline_price: store.checkout_headline_price || null,
+        checkout_testimonials: store.checkout_testimonials || null,
+        checkout_faq: JSON.stringify(faqItems),
+      };
+      await api.put(`/admin/stores/${store.id}`, payload);
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao salvar FAQ.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = 'w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-violet-500 placeholder-gray-500';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+      <div className="w-full max-w-2xl bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+          <h2 className="font-semibold text-white flex items-center gap-2">
+            <HelpCircle className="h-4 w-4 text-blue-400" />
+            FAQ — {store.name}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+          {loading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+            </div>
+          )}
+
+          {!loading && (
+            <>
+              {/* Form Section */}
+              <form onSubmit={handleFormSubmit} className="border border-gray-700 bg-gray-750/50 rounded-xl p-4 space-y-3">
+                <h3 className="text-sm font-medium text-white">
+                  {editingIndex !== null ? 'Editar FAQ' : 'Adicionar FAQ'}
+                </h3>
+
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Pergunta *</label>
+                  <input
+                    type="text"
+                    value={form.question}
+                    onChange={e => setForm(f => ({ ...f, question: e.target.value }))}
+                    placeholder="Ex: Como recebo o acesso?"
+                    className={inputCls}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Resposta *</label>
+                  <textarea
+                    rows={3}
+                    value={form.answer}
+                    onChange={e => setForm(f => ({ ...f, answer: e.target.value }))}
+                    placeholder="Ex: Logo após o pagamento..."
+                    className={inputCls}
+                    required
+                  />
+                </div>
+
+                {error && <p className="text-xs text-red-400">{error}</p>}
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 text-xs px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                  >
+                    {editingIndex !== null ? 'Atualizar' : 'Adicionar ao FAQ'}
+                  </button>
+                  {editingIndex !== null && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingIndex(null);
+                        setForm({ question: '', answer: '' });
+                      }}
+                      className="text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                    >
+                      Cancelar Edição
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              {/* Import JSON Section Toggle */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowJsonImport(!showJsonImport)}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
+                >
+                  {showJsonImport ? 'Ocultar Importação JSON' : 'Importar FAQ via JSON'}
+                </button>
+              </div>
+
+              {showJsonImport && (
+                <div className="border border-blue-500/20 bg-gray-750/30 rounded-xl p-4 space-y-3">
+                  <h3 className="text-sm font-medium text-white">Importar Lista JSON</h3>
+                  <p className="text-[11px] text-gray-500 leading-tight">
+                    Cole um array no formato: <code className="bg-gray-900 px-1 py-0.5 rounded text-blue-300">{'[{"question": "Pergunta?", "answer": "Resposta."}]'}</code>.
+                    Isso irá substituir todos os itens da lista abaixo ao confirmar.
+                  </p>
+                  <textarea
+                    rows={4}
+                    value={jsonText}
+                    onChange={e => setJsonText(e.target.value)}
+                    placeholder='[{"question": "Como recebo o acesso?", "answer": "Imediatamente após o pagamento."}]'
+                    className={`${inputCls} font-mono text-xs`}
+                  />
+                  {jsonError && <p className="text-xs text-red-400">{jsonError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleJsonImport}
+                      className="text-xs px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                    >
+                      Processar JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowJsonImport(false);
+                        setJsonText('');
+                        setJsonError('');
+                      }}
+                      className="text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* FAQ List */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-white flex justify-between items-center">
+                  <span>Lista de FAQ ({faqItems.length})</span>
+                  {faqItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(faqItems, null, 2));
+                        alert('JSON de FAQ copiado para a área de transferência!');
+                      }}
+                      className="text-xs text-blue-400 hover:text-blue-300 font-normal underline"
+                    >
+                      Copiar JSON Completo
+                    </button>
+                  )}
+                </h3>
+
+                {faqItems.length === 0 ? (
+                  <p className="text-gray-500 text-xs text-center py-6">Nenhum FAQ cadastrado. O checkout usará o FAQ padrão.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {faqItems.map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-start gap-4 p-3 bg-gray-700/30 border border-gray-700/60 rounded-xl">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-white text-xs">{item.question}</p>
+                          <p className="text-xs text-gray-300 mt-1 leading-relaxed whitespace-pre-wrap">{item.answer}</p>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(idx)}
+                            className="p-1 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(idx)}
+                            className="p-1 rounded-md bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-700 shrink-0 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSaveAll}
+            disabled={saving || loading}
+            className="inline-flex items-center justify-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-60 transition-colors"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Salvar no Banco
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Stores page
 // ---------------------------------------------------------------------------
 
@@ -901,6 +1236,7 @@ export default function Stores() {
 
   const [pkgStore, setPkgStore] = useState(null);
   const [testimonialsStore, setTestimonialsStore] = useState(null);
+  const [faqStore, setFaqStore] = useState(null);
 
   const fetchStores = useCallback(async () => {
     setLoading(true);
@@ -1006,6 +1342,8 @@ export default function Stores() {
         checkout_theme_color: s.checkout_theme_color || null,
         checkout_whatsapp_text: s.checkout_whatsapp_text || null,
         checkout_headline_price: s.checkout_headline_price || null,
+        checkout_testimonials: s.checkout_testimonials || null,
+        checkout_faq: s.checkout_faq || null,
       };
       const res = await api.post(`/admin/stores/${s.id}/copy`, payload);
       const newStore = { ...payload, id: res.data.id };
@@ -1081,6 +1419,12 @@ export default function Stores() {
                   className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 transition-colors"
                 >
                   <MessageSquare className="h-3.5 w-3.5" /> Gerenciar Depoimentos
+                </button>
+                <button
+                  onClick={() => setFaqStore(s)}
+                  className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 transition-colors"
+                >
+                  <HelpCircle className="h-3.5 w-3.5" /> Gerenciar FAQ
                 </button>
                 <div className="flex gap-2">
                   <button
@@ -1259,6 +1603,10 @@ export default function Stores() {
 
       {testimonialsStore && (
         <StoreTestimonialsModal store={testimonialsStore} onClose={() => { setTestimonialsStore(null); fetchStores(); }} />
+      )}
+
+      {faqStore && (
+        <StoreFaqModal store={faqStore} onClose={() => { setFaqStore(null); fetchStores(); }} />
       )}
 
       {toDelete && (
