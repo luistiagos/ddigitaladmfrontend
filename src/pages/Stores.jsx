@@ -1214,7 +1214,7 @@ function StoreFaqModal({ store, onClose }) {
 // Stores page
 // ---------------------------------------------------------------------------
 
-const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '' };
+const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '' };
 
 
 export default function Stores() {
@@ -1264,14 +1264,20 @@ export default function Stores() {
 
   function openEdit(s) {
     setEditing(s);
-    setForm({ 
-      name: s.name || '', 
-      url_thumb: s.url_thumb || '', 
+    setForm({
+      name: s.name || '',
+      url_thumb: s.url_thumb || '',
       url_page: s.url_page || '',
       checkout_features: s.checkout_features || '',
       checkout_theme_color: s.checkout_theme_color || '',
       checkout_whatsapp_text: s.checkout_whatsapp_text || '',
-      checkout_headline_price: s.checkout_headline_price || ''
+      checkout_headline_price: s.checkout_headline_price || '',
+      checkout_whatsapp: s.checkout_whatsapp || '',
+      checkout_email: s.checkout_email || '',
+      checkout_trust_seal_mercadopago: s.checkout_trust_seal_mercadopago ?? 1,
+      checkout_trust_seal_ssl: s.checkout_trust_seal_ssl ?? 1,
+      checkout_trust_seal_siteconfiavel: s.checkout_trust_seal_siteconfiavel ?? 1,
+      checkout_logo_label: s.checkout_logo_label || '',
     });
     setThumbPreview(s.url_thumb || '');
     setThumbError(false);
@@ -1301,6 +1307,12 @@ export default function Stores() {
         checkout_theme_color: form.checkout_theme_color || null,
         checkout_whatsapp_text: form.checkout_whatsapp_text || null,
         checkout_headline_price: form.checkout_headline_price || null,
+        checkout_whatsapp: form.checkout_whatsapp || null,
+        checkout_email: form.checkout_email || null,
+        checkout_trust_seal_mercadopago: form.checkout_trust_seal_mercadopago,
+        checkout_trust_seal_ssl: form.checkout_trust_seal_ssl,
+        checkout_trust_seal_siteconfiavel: form.checkout_trust_seal_siteconfiavel,
+        checkout_logo_label: form.checkout_logo_label || null,
       };
       if (editing) {
         await api.put(`/admin/stores/${editing.id}`, payload);
@@ -1342,6 +1354,12 @@ export default function Stores() {
         checkout_theme_color: s.checkout_theme_color || null,
         checkout_whatsapp_text: s.checkout_whatsapp_text || null,
         checkout_headline_price: s.checkout_headline_price || null,
+        checkout_whatsapp: s.checkout_whatsapp || null,
+        checkout_email: s.checkout_email || null,
+        checkout_trust_seal_mercadopago: s.checkout_trust_seal_mercadopago ?? 1,
+        checkout_trust_seal_ssl: s.checkout_trust_seal_ssl ?? 1,
+        checkout_trust_seal_siteconfiavel: s.checkout_trust_seal_siteconfiavel ?? 1,
+        checkout_logo_label: s.checkout_logo_label || null,
         checkout_testimonials: s.checkout_testimonials || null,
         checkout_faq: s.checkout_faq || null,
       };
@@ -1568,6 +1586,79 @@ export default function Stores() {
                     rows={4}
                     className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
                   />
+                </div>
+
+                <div className="md:col-span-2 border-t border-gray-700 pt-4 mt-2">
+                  <h3 className="text-sm font-semibold text-white mb-3">Exibição no Checkout</h3>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">WhatsApp (número)</label>
+                  <input
+                    type="text"
+                    value={form.checkout_whatsapp}
+                    onChange={(e) => setForm(f => ({ ...f, checkout_whatsapp: e.target.value }))}
+                    placeholder="ex: 5511999999999"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">E-mail</label>
+                  <input
+                    type="email"
+                    value={form.checkout_email}
+                    onChange={(e) => setForm(f => ({ ...f, checkout_email: e.target.value }))}
+                    placeholder="ex: contato@exemplo.com"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Label do Logo</label>
+                  <input
+                    type="text"
+                    value={form.checkout_logo_label}
+                    onChange={(e) => setForm(f => ({ ...f, checkout_logo_label: e.target.value }))}
+                    placeholder="ex: DIGITAL STORE GAMES"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo Site Confiável</label>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, checkout_trust_seal_siteconfiavel: f.checkout_trust_seal_siteconfiavel ? 0 : 1 }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_siteconfiavel ? 'bg-violet-600' : 'bg-gray-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_siteconfiavel ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                  <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_siteconfiavel ? 'Ativo' : 'Inativo'}</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo SSL</label>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, checkout_trust_seal_ssl: f.checkout_trust_seal_ssl ? 0 : 1 }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_ssl ? 'bg-violet-600' : 'bg-gray-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_ssl ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                  <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_ssl ? 'Ativo' : 'Inativo'}</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Selo Mercado Pago</label>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, checkout_trust_seal_mercadopago: f.checkout_trust_seal_mercadopago ? 0 : 1 }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.checkout_trust_seal_mercadopago ? 'bg-violet-600' : 'bg-gray-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.checkout_trust_seal_mercadopago ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                  <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_mercadopago ? 'Ativo' : 'Inativo'}</span>
                 </div>
               </div>
 
