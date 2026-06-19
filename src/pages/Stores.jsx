@@ -527,23 +527,28 @@ function StoreTestimonialsModal({ store, onClose }) {
   const [showJsonImport, setShowJsonImport] = useState(false);
 
   useEffect(() => {
-    if (store.checkout_testimonials) {
+    async function loadData() {
       try {
-        const parsed = JSON.parse(store.checkout_testimonials);
-        if (Array.isArray(parsed)) {
-          setTestimonials(parsed);
+        const res = await api.get(`/admin/stores/${store.id}/checkout_data`);
+        if (res.data.checkout_testimonials) {
+          const parsed = JSON.parse(res.data.checkout_testimonials);
+          if (Array.isArray(parsed)) {
+            setTestimonials(parsed);
+          } else {
+            setTestimonials([]);
+          }
         } else {
           setTestimonials([]);
         }
-      } catch (e) {
-        console.error("Erro ao fazer parse dos depoimentos:", e);
+      } catch (err) {
+        console.error("Erro ao carregar depoimentos:", err);
         setTestimonials([]);
+      } finally {
+        setLoading(false);
       }
-    } else {
-      setTestimonials([]);
     }
-    setLoading(false);
-  }, [store]);
+    loadData();
+  }, [store.id]);
 
   // Handle individual testimonial submit (add or update)
   function handleFormSubmit(e) {
@@ -631,10 +636,9 @@ function StoreTestimonialsModal({ store, onClose }) {
     setError('');
     try {
       const payload = {
-        ...store,
         checkout_testimonials: JSON.stringify(testimonials)
       };
-      await api.put(`/admin/stores/${store.id}`, payload);
+      await api.put(`/admin/stores/${store.id}/checkout_data`, payload);
       onClose();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao salvar depoimentos.');
@@ -886,23 +890,28 @@ function StoreFaqModal({ store, onClose }) {
   const [showJsonImport, setShowJsonImport] = useState(false);
 
   useEffect(() => {
-    if (store.checkout_faq) {
+    async function loadData() {
       try {
-        const parsed = JSON.parse(store.checkout_faq);
-        if (Array.isArray(parsed)) {
-          setFaqItems(parsed);
+        const res = await api.get(`/admin/stores/${store.id}/checkout_data`);
+        if (res.data.checkout_faq) {
+          const parsed = JSON.parse(res.data.checkout_faq);
+          if (Array.isArray(parsed)) {
+            setFaqItems(parsed);
+          } else {
+            setFaqItems([]);
+          }
         } else {
           setFaqItems([]);
         }
-      } catch (e) {
-        console.error("Erro ao fazer parse do FAQ:", e);
+      } catch (err) {
+        console.error("Erro ao carregar FAQ:", err);
         setFaqItems([]);
+      } finally {
+        setLoading(false);
       }
-    } else {
-      setFaqItems([]);
     }
-    setLoading(false);
-  }, [store]);
+    loadData();
+  }, [store.id]);
 
   function handleFormSubmit(e) {
     e.preventDefault();
@@ -979,10 +988,9 @@ function StoreFaqModal({ store, onClose }) {
     setError('');
     try {
       const payload = {
-        ...store,
         checkout_faq: JSON.stringify(faqItems),
       };
-      await api.put(`/admin/stores/${store.id}`, payload);
+      await api.put(`/admin/stores/${store.id}/checkout_data`, payload);
       onClose();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao salvar FAQ.');
@@ -1199,7 +1207,7 @@ function StoreFaqModal({ store, onClose }) {
 // Stores page
 // ---------------------------------------------------------------------------
 
-const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '' };
+const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '' };
 
 
 export default function Stores() {
@@ -1263,6 +1271,7 @@ export default function Stores() {
       checkout_trust_seal_ssl: s.checkout_trust_seal_ssl ?? 1,
       checkout_trust_seal_siteconfiavel: s.checkout_trust_seal_siteconfiavel ?? 1,
       checkout_logo_label: s.checkout_logo_label || '',
+      checkout_logo_url: s.checkout_logo_url || '',
     });
     setThumbPreview(s.url_thumb || '');
     setThumbError(false);
@@ -1298,6 +1307,7 @@ export default function Stores() {
         checkout_trust_seal_ssl: form.checkout_trust_seal_ssl,
         checkout_trust_seal_siteconfiavel: form.checkout_trust_seal_siteconfiavel,
         checkout_logo_label: form.checkout_logo_label || null,
+        checkout_logo_url: form.checkout_logo_url || null,
       };
       if (editing) {
         await api.put(`/admin/stores/${editing.id}`, payload);
@@ -1345,8 +1355,7 @@ export default function Stores() {
         checkout_trust_seal_ssl: s.checkout_trust_seal_ssl ?? 1,
         checkout_trust_seal_siteconfiavel: s.checkout_trust_seal_siteconfiavel ?? 1,
         checkout_logo_label: s.checkout_logo_label || null,
-        checkout_testimonials: s.checkout_testimonials || null,
-        checkout_faq: s.checkout_faq || null,
+        checkout_logo_url: s.checkout_logo_url || null,
       };
       const res = await api.post(`/admin/stores/${s.id}/copy`, payload);
       const newStore = { ...payload, id: res.data.id };
@@ -1607,6 +1616,17 @@ export default function Stores() {
                     value={form.checkout_logo_label}
                     onChange={(e) => setForm(f => ({ ...f, checkout_logo_label: e.target.value }))}
                     placeholder="ex: DIGITAL STORE GAMES"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">URL do Logo</label>
+                  <input
+                    type="text"
+                    value={form.checkout_logo_url}
+                    onChange={(e) => setForm(f => ({ ...f, checkout_logo_url: e.target.value }))}
+                    placeholder="ex: https://dominio.com/logo.png"
                     className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
                   />
                 </div>
