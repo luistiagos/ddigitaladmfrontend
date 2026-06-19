@@ -631,14 +631,7 @@ function StoreTestimonialsModal({ store, onClose }) {
     setError('');
     try {
       const payload = {
-        name: store.name,
-        url_thumb: store.url_thumb || null,
-        url_checkout: store.url_checkout || null,
-        url_page: store.url_page || null,
-        checkout_features: store.checkout_features || null,
-        checkout_theme_color: store.checkout_theme_color || null,
-        checkout_whatsapp_text: store.checkout_whatsapp_text || null,
-        checkout_headline_price: store.checkout_headline_price || null,
+        ...store,
         checkout_testimonials: JSON.stringify(testimonials)
       };
       await api.put(`/admin/stores/${store.id}`, payload);
@@ -986,15 +979,7 @@ function StoreFaqModal({ store, onClose }) {
     setError('');
     try {
       const payload = {
-        name: store.name,
-        url_thumb: store.url_thumb || null,
-        url_checkout: store.url_checkout || null,
-        url_page: store.url_page || null,
-        checkout_features: store.checkout_features || null,
-        checkout_theme_color: store.checkout_theme_color || null,
-        checkout_whatsapp_text: store.checkout_whatsapp_text || null,
-        checkout_headline_price: store.checkout_headline_price || null,
-        checkout_testimonials: store.checkout_testimonials || null,
+        ...store,
         checkout_faq: JSON.stringify(faqItems),
       };
       await api.put(`/admin/stores/${store.id}`, payload);
