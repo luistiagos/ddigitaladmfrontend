@@ -141,22 +141,16 @@ export default function WhatsAppSessions() {
     setExporting(true);
     setExportError('');
     try {
-      const res = await api.get(`/admin/wpp/sessions/export.zip?${buildExportParams()}`, {
-        responseType: 'blob',
-      });
-      downloadBlob(res.data, exportFilename('whatsapp_sessoes', 'zip'));
+      // Pega um token curto e deixa o NAVEGADOR baixar nativamente (Content-Disposition).
+      // Download via XHR/blob falha em iOS Safari e pode ser bloqueado por extensoes/proxy.
+      const { data } = await api.get('/admin/wpp/sessions/export-token');
+      const token = data?.token;
+      if (!token) throw new Error('Token de download ausente');
+      const base = api.defaults.baseURL || '';
+      const url = `${base}/admin/wpp/sessions/export.zip?${buildExportParams()}&token=${encodeURIComponent(token)}`;
+      window.location.href = url;
     } catch (err) {
-      let errorMessage = 'Erro ao exportar ZIP.';
-      if (err.response?.data instanceof Blob) {
-        try {
-          const text = await err.response.data.text();
-          const parsed = JSON.parse(text);
-          errorMessage = parsed.error || errorMessage;
-        } catch {}
-      } else if (err.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      }
-      setExportError(errorMessage);
+      setExportError(err.response?.data?.error || 'Erro ao exportar ZIP.');
     } finally {
       setExporting(false);
     }
