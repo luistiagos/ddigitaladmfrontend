@@ -146,7 +146,17 @@ export default function WhatsAppSessions() {
       });
       downloadBlob(res.data, exportFilename('whatsapp_sessoes', 'zip'));
     } catch (err) {
-      setExportError(err.response?.data?.error || 'Erro ao exportar ZIP.');
+      let errorMessage = 'Erro ao exportar ZIP.';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          errorMessage = parsed.error || errorMessage;
+        } catch {}
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      }
+      setExportError(errorMessage);
     } finally {
       setExporting(false);
     }
