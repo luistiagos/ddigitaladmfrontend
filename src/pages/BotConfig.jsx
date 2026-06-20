@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle, Eye, Activity, KeyRound, Save } from 'lucide-react';
+import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle, Eye, Activity, KeyRound, Save, Trash2, Plus } from 'lucide-react';
 import api from '@/services/api';
 
 function DiagStep({ step }) {
@@ -48,9 +48,13 @@ export default function BotConfig() {
   // ── Visão (leitura de imagens) ──
   const [vision, setVision] = useState(null);            // config mascarada do backend
   const [usage, setUsage] = useState(null);              // agregados de uso
-  const [visionForm, setVisionForm] = useState({ apiKey: '', model: '', dailyLimit: '' });
+  const [keys, setKeys] = useState([]);                  // chaves da rotação (mascaradas)
+  const [visionForm, setVisionForm] = useState({ model: '', dailyLimit: '' });
+  const [newKey, setNewKey] = useState({ apiKey: '', label: '' });
   const [visionSaving, setVisionSaving] = useState(false);
   const [visionMsg, setVisionMsg] = useState(null);      // {type, text}
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyMsg, setKeyMsg] = useState(null);            // {type, text}
   const [visionTesting, setVisionTesting] = useState(false);
   const [visionTestResult, setVisionTestResult] = useState(null);
 
@@ -64,17 +68,18 @@ export default function BotConfig() {
 
   async function loadVision() {
     try {
-      const [cfg, use] = await Promise.all([
+      const [cfg, use, ks] = await Promise.all([
         api.get('/admin/vision/config'),
         api.get('/admin/vision/usage'),
+        api.get('/admin/vision/keys'),
       ]);
       setVision(cfg.data);
       setUsage(use.data);
-      setVisionForm((f) => ({
-        ...f,
+      setKeys(ks.data.keys || []);
+      setVisionForm({
         model: cfg.data.model || '',
         dailyLimit: cfg.data.daily_limit != null ? String(cfg.data.daily_limit) : '',
-      }));
+      });
     } catch {
       /* silencioso — card mostra estado de carregando */
     }
@@ -85,12 +90,10 @@ export default function BotConfig() {
     setVisionMsg(null);
     try {
       const payload = {};
-      if (visionForm.apiKey.trim()) payload.api_key = visionForm.apiKey.trim();
       if (visionForm.model.trim()) payload.model = visionForm.model.trim();
       if (visionForm.dailyLimit !== '') payload.daily_limit = Number(visionForm.dailyLimit);
       const res = await api.post('/admin/vision/config', payload);
       setVision(res.data);
-      setVisionForm((f) => ({ ...f, apiKey: '' })); // limpa o campo de chave após salvar
       setVisionMsg({ type: 'success', text: 'Configuração salva.' });
       loadVision();
     } catch (err) {
@@ -117,7 +120,7 @@ export default function BotConfig() {
     setVisionTestResult(null);
     try {
       const body = {};
-      if (visionForm.apiKey.trim()) body.api_key = visionForm.apiKey.trim();
+      if (newKey.apiKey.trim()) body.api_key = newKey.apiKey.trim();   // testa a chave nova; vazio = chave atual
       if (visionForm.model.trim()) body.model = visionForm.model.trim();
       const res = await api.post('/admin/vision/test', body);
       setVisionTestResult(res.data);
@@ -125,6 +128,46 @@ export default function BotConfig() {
       setVisionTestResult({ ok: false, error: err.response?.data?.error || 'Erro no teste.' });
     } finally {
       setVisionTesting(false);
+    }
+  }
+
+  async function addKey() {
+    if (!newKey.apiKey.trim()) return;
+    setKeyBusy(true);
+    setKeyMsg(null);
+    try {
+      const res = await api.post('/admin/vision/keys', {
+        api_key: newKey.apiKey.trim(),
+        label: newKey.label.trim(),
+      });
+      setKeys(res.data.keys || []);
+      setNewKey({ apiKey: '', label: '' });
+      setVisionTestResult(null);
+      setKeyMsg({ type: 'success', text: 'Chave adicionada à rotação.' });
+      loadVision();
+    } catch (err) {
+      setKeyMsg({ type: 'error', text: err.response?.data?.error || 'Erro ao adicionar a chave.' });
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
+  async function toggleKey(k) {
+    try {
+      const res = await api.patch(`/admin/vision/keys/${k.id}`, { enabled: !k.enabled });
+      setKeys(res.data.keys || []);
+    } catch {
+      setKeyMsg({ type: 'error', text: 'Erro ao alterar a chave.' });
+    }
+  }
+
+  async function removeKey(k) {
+    if (!confirm(`Remover a chave ${k.fingerprint}${k.label ? ` (${k.label})` : ''} da rotação?`)) return;
+    try {
+      const res = await api.delete(`/admin/vision/keys/${k.id}`);
+      setKeys(res.data.keys || []);
+    } catch {
+      setKeyMsg({ type: 'error', text: 'Erro ao remover a chave.' });
     }
   }
 
@@ -290,25 +333,8 @@ export default function BotConfig() {
             </div>
           ) : (
             <div className="space-y-5">
-              {/* Config */}
+              {/* Config: modelo + limite */}
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className="text-xs text-gray-400 flex items-center gap-1.5 mb-1">
-                    <KeyRound className="h-3.5 w-3.5" /> Chave da API (Gemini)
-                  </label>
-                  <input
-                    type="password"
-                    value={visionForm.apiKey}
-                    onChange={(e) => setVisionForm((f) => ({ ...f, apiKey: e.target.value }))}
-                    placeholder={vision.key_set ? `Atual: ${vision.key_masked} — deixe em branco para manter` : 'Cole a nova chave do Gemini'}
-                    className="w-full rounded-lg bg-gray-700/50 border border-gray-600 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition"
-                  />
-                  <p className="text-[11px] text-gray-600 mt-1">
-                    Pegue em aistudio.google.com/apikey. {vision.key_set
-                      ? <>Origem atual: <span className="text-gray-400">{vision.source?.api_key === 'db' ? 'painel' : '.env'}</span>.</>
-                      : 'Nenhuma chave configurada.'}
-                  </p>
-                </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Modelo</label>
                   <input
@@ -339,20 +365,12 @@ export default function BotConfig() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <button
-                  onClick={testVision}
-                  disabled={visionTesting}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm font-medium transition"
-                >
-                  {visionTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  {visionTesting ? 'Testando…' : 'Testar chave'}
-                </button>
-                <button
                   onClick={saveVision}
                   disabled={visionSaving}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium transition"
                 >
                   {visionSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Salvar
+                  Salvar config
                 </button>
                 {visionMsg && (
                   <span className={`text-xs ${visionMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
@@ -361,24 +379,119 @@ export default function BotConfig() {
                 )}
               </div>
 
-              {visionTestResult && (
-                <div className={`rounded-lg border px-3 py-2 text-xs flex items-start gap-2 ${
-                  visionTestResult.ok
-                    ? 'border-green-500/30 bg-green-500/10 text-green-300'
-                    : visionTestResult.rate_limited
-                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                      : 'border-red-500/30 bg-red-500/10 text-red-300'
-                }`}>
-                  {visionTestResult.ok
-                    ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                    : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
-                  <span>
-                    {visionTestResult.ok
-                      ? `Chave OK (modelo ${visionTestResult.model}).`
-                      : visionTestResult.error}
-                  </span>
+              {/* Chaves (rotação) */}
+              <div className="border-t border-gray-700/50 pt-5">
+                <h3 className="text-sm font-medium text-gray-200 flex items-center gap-1.5 mb-1">
+                  <KeyRound className="h-4 w-4 text-amber-400" /> Chaves do Gemini (rotação)
+                </h3>
+                <p className="text-[11px] text-gray-500 mb-3">
+                  O bot usa a 1ª chave disponível; quando a cota dela estoura (429), ela entra em
+                  cooldown e a próxima assume na hora. Some várias contas grátis para multiplicar a
+                  cota. Pegue cada chave em <span className="text-gray-400">aistudio.google.com/apikey</span>.
+                </p>
+
+                <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
+                  <input
+                    type="password"
+                    value={newKey.apiKey}
+                    onChange={(e) => setNewKey((k) => ({ ...k, apiKey: e.target.value }))}
+                    placeholder="Cole uma chave do Gemini"
+                    className="w-full rounded-lg bg-gray-700/50 border border-gray-600 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition"
+                  />
+                  <input
+                    type="text"
+                    value={newKey.label}
+                    onChange={(e) => setNewKey((k) => ({ ...k, label: e.target.value }))}
+                    placeholder="Apelido (ex: conta 2)"
+                    className="w-full rounded-lg bg-gray-700/50 border border-gray-600 px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition"
+                  />
                 </div>
-              )}
+                <div className="flex flex-wrap items-center gap-3 mt-2">
+                  <button
+                    onClick={testVision}
+                    disabled={visionTesting || !newKey.apiKey.trim()}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm font-medium transition"
+                  >
+                    {visionTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    {visionTesting ? 'Testando…' : 'Testar'}
+                  </button>
+                  <button
+                    onClick={addKey}
+                    disabled={keyBusy || !newKey.apiKey.trim()}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium transition"
+                  >
+                    {keyBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Adicionar à rotação
+                  </button>
+                  {keyMsg && (
+                    <span className={`text-xs ${keyMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                      {keyMsg.text}
+                    </span>
+                  )}
+                </div>
+
+                {visionTestResult && (
+                  <div className={`mt-2 rounded-lg border px-3 py-2 text-xs flex items-start gap-2 ${
+                    visionTestResult.ok
+                      ? 'border-green-500/30 bg-green-500/10 text-green-300'
+                      : visionTestResult.rate_limited
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                        : 'border-red-500/30 bg-red-500/10 text-red-300'
+                  }`}>
+                    {visionTestResult.ok
+                      ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                      : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                    <span>
+                      {visionTestResult.ok
+                        ? `Chave OK (modelo ${visionTestResult.model}).`
+                        : visionTestResult.error}
+                    </span>
+                  </div>
+                )}
+
+                {keys.length === 0 ? (
+                  <p className="text-[11px] text-gray-500 mt-3">
+                    Nenhuma chave na rotação — o bot está usando a chave do{' '}
+                    <span className="text-gray-400">.env</span>
+                    {vision.key_set ? ` (${vision.key_masked})` : ''}. Adicione chaves acima para ativar a rotação.
+                  </p>
+                ) : (
+                  <div className="space-y-2 mt-3">
+                    {keys.map((k) => (
+                      <div key={k.id} className="flex items-center gap-3 bg-gray-900/40 border border-gray-700/50 rounded-lg px-3 py-2">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                          k.cooling ? 'bg-amber-500' : k.enabled ? 'bg-green-500' : 'bg-gray-600'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-gray-200 truncate">
+                            {k.fingerprint}
+                            {k.label && <span className="text-gray-500"> · {k.label}</span>}
+                            {k.cooling && <span className="ml-2 text-[10px] text-amber-400">em cooldown</span>}
+                            {!k.enabled && <span className="ml-2 text-[10px] text-gray-500">desativada</span>}
+                          </div>
+                          <div className="text-[11px] text-gray-500">
+                            hoje: <span className="text-green-400">{k.today.ok}✓</span>
+                            {' · '}<span className="text-amber-400">{k.today.rate_limited} cota</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => toggleKey(k)}
+                          className="text-[11px] px-2 py-1 rounded bg-gray-700/60 hover:bg-gray-700 text-gray-300 transition"
+                        >
+                          {k.enabled ? 'Desativar' : 'Ativar'}
+                        </button>
+                        <button
+                          onClick={() => removeKey(k)}
+                          className="p-1.5 text-gray-500 hover:text-red-400 rounded hover:bg-gray-700/60 transition"
+                          title="Remover chave"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Uso / cota */}
               <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
