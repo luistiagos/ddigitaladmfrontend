@@ -1207,7 +1207,7 @@ function StoreFaqModal({ store, onClose }) {
 // Stores page
 // ---------------------------------------------------------------------------
 
-const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '' };
+const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '', fb_pixel_id: '', tiktok_pixel_id: '' };
 
 
 export default function Stores() {
@@ -1272,6 +1272,8 @@ export default function Stores() {
       checkout_trust_seal_siteconfiavel: s.checkout_trust_seal_siteconfiavel ?? 1,
       checkout_logo_label: s.checkout_logo_label || '',
       checkout_logo_url: s.checkout_logo_url || '',
+      fb_pixel_id: s.fb_pixel_id || '',
+      tiktok_pixel_id: s.tiktok_pixel_id || '',
     });
     setThumbPreview(s.url_thumb || '');
     setThumbError(false);
@@ -1308,6 +1310,8 @@ export default function Stores() {
         checkout_trust_seal_siteconfiavel: form.checkout_trust_seal_siteconfiavel,
         checkout_logo_label: form.checkout_logo_label || null,
         checkout_logo_url: form.checkout_logo_url || null,
+        fb_pixel_id: form.fb_pixel_id || null,
+        tiktok_pixel_id: form.tiktok_pixel_id || null,
       };
       if (editing) {
         await api.put(`/admin/stores/${editing.id}`, payload);
@@ -1673,6 +1677,33 @@ export default function Stores() {
                       <span className="ml-2 text-xs text-gray-400">{form.checkout_trust_seal_mercadopago ? 'Ativo' : 'Inativo'}</span>
                     </div>
                   </div>
+                </div>
+
+                <div className="md:col-span-2 border-t border-gray-700 pt-4 mt-2">
+                  <h3 className="text-sm font-semibold text-white mb-1">Rastreamento / Pixels</h3>
+                  <p className="text-[11px] text-gray-500">Deixe vazio para usar o pixel padrão. O token da API de Conversões é global (configurado no servidor).</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Facebook Pixel ID</label>
+                  <input
+                    type="text"
+                    value={form.fb_pixel_id}
+                    onChange={(e) => setForm(f => ({ ...f, fb_pixel_id: e.target.value }))}
+                    placeholder="ex: 2120259218170665"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">TikTok Pixel ID</label>
+                  <input
+                    type="text"
+                    value={form.tiktok_pixel_id}
+                    onChange={(e) => setForm(f => ({ ...f, tiktok_pixel_id: e.target.value }))}
+                    placeholder="ex: D6JMPOJC77UCV6MRFV20"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
                 </div>
                 </div>
 
