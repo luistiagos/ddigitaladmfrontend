@@ -1207,7 +1207,7 @@ function StoreFaqModal({ store, onClose }) {
 // Stores page
 // ---------------------------------------------------------------------------
 
-const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '', fb_pixel_id: '', tiktok_pixel_id: '' };
+const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '', fb_pixel_id: '', tiktok_pixel_id: '', fb_pixel_token: '' };
 
 
 export default function Stores() {
@@ -1274,6 +1274,7 @@ export default function Stores() {
       checkout_logo_url: s.checkout_logo_url || '',
       fb_pixel_id: s.fb_pixel_id || '',
       tiktok_pixel_id: s.tiktok_pixel_id || '',
+      fb_pixel_token: s.fb_pixel_token || '',
     });
     setThumbPreview(s.url_thumb || '');
     setThumbError(false);
@@ -1312,6 +1313,7 @@ export default function Stores() {
         checkout_logo_url: form.checkout_logo_url || null,
         fb_pixel_id: form.fb_pixel_id || null,
         tiktok_pixel_id: form.tiktok_pixel_id || null,
+        fb_pixel_token: form.fb_pixel_token || null,
       };
       if (editing) {
         await api.put(`/admin/stores/${editing.id}`, payload);
@@ -1681,7 +1683,7 @@ export default function Stores() {
 
                 <div className="md:col-span-2 border-t border-gray-700 pt-4 mt-2">
                   <h3 className="text-sm font-semibold text-white mb-1">Rastreamento / Pixels</h3>
-                  <p className="text-[11px] text-gray-500">Deixe vazio para usar o pixel padrão. O token da API de Conversões é global (configurado no servidor).</p>
+                  <p className="text-[11px] text-gray-500">Pixel ID e Token vazios = usa os padrões do servidor. Preencha para lojas em Business Managers diferentes.</p>
                 </div>
 
                 <div>
@@ -1704,6 +1706,18 @@ export default function Stores() {
                     placeholder="ex: D6JMPOJC77UCV6MRFV20"
                     className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
                   />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Token da Conversions API (Facebook)</label>
+                  <input
+                    type="password"
+                    value={form.fb_pixel_token}
+                    onChange={(e) => setForm(f => ({ ...f, fb_pixel_token: e.target.value }))}
+                    placeholder="vazio = usa o token padrão do servidor"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">Token de Usuário do Sistema do Business Manager desta loja. Necessário apenas se o pixel pertence a um BM diferente do padrão.</p>
                 </div>
                 </div>
 
