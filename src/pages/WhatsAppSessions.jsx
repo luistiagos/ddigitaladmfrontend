@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, History, UserCog, Loader2, MessageCircle, Download } from 'lucide-react';
+import { Search, X, History, UserCog, Loader2, MessageCircle, Download, Bell, BellOff } from 'lucide-react';
 import api from '@/services/api';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { PhoneCell } from '@/components/ui/ContactCell';
@@ -71,6 +71,7 @@ export default function WhatsAppSessions() {
   const [anonymizeExport, setAnonymizeExport] = useState(true);
   const [historySession, setHistorySession] = useState(null);
   const [agentSession, setAgentSession] = useState(null);
+  const [togglingKey, setTogglingKey] = useState('');
 
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'last_dttime', defaultDir: 'desc' });
@@ -166,6 +167,29 @@ export default function WhatsAppSessions() {
     fetchSessions();
   }
 
+  async function handleToggleDontTouch(session) {
+    const lid = getSessionKey(session);
+    if (!lid || togglingKey) return;
+    const next = !session.dont_touch;
+    setTogglingKey(lid);
+    setError('');
+    try {
+      await api.patch(`/admin/wpp/sessions/${encodeURIComponent(lid)}/dont-touch`, {
+        active: next,
+      });
+      setData((prev) => ({
+        ...prev,
+        items: prev.items.map((item) => (
+          getSessionKey(item) === lid ? { ...item, dont_touch: next } : item
+        )),
+      }));
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao atualizar a flag "não tocar".');
+    } finally {
+      setTogglingKey('');
+    }
+  }
+
   const columns = [
     {
       key: 'last_dttime',
@@ -212,6 +236,37 @@ export default function WhatsAppSessions() {
         </button>
       ),
       csvValue: (row) => getAgentLabel(agents, row.current_agent),
+    },
+    {
+      key: 'dont_touch',
+      label: 'Não tocar',
+      className: 'px-4 py-3 whitespace-nowrap',
+      render: (row) => {
+        const lid = getSessionKey(row);
+        const active = !!row.dont_touch;
+        const busy = togglingKey === lid;
+        return (
+          <button
+            type="button"
+            onClick={() => handleToggleDontTouch(row)}
+            disabled={busy}
+            title={active
+              ? 'Bot silenciado nesta conversa — clique para reativar os envios'
+              : 'Clique para silenciar: o bot/agents nunca enviam mensagem nesta conversa'}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-60 ${
+              active
+                ? 'bg-red-600/80 hover:bg-red-600 text-white'
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            }`}
+          >
+            {busy
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : active ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+            {active ? 'Silenciado' : 'Ativo'}
+          </button>
+        );
+      },
+      csvValue: (row) => (row.dont_touch ? 'Silenciado' : 'Ativo'),
     },
     {
       key: 'actions',
