@@ -1207,7 +1207,7 @@ function StoreFaqModal({ store, onClose }) {
 // Stores page
 // ---------------------------------------------------------------------------
 
-const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '', fb_pixel_id: '', tiktok_pixel_id: '', fb_pixel_token: '' };
+const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '', fb_pixel_id: '', tiktok_pixel_id: '', fb_pixel_token: '', meta_ad_account_id: '' };
 
 
 export default function Stores() {
@@ -1275,6 +1275,7 @@ export default function Stores() {
       fb_pixel_id: s.fb_pixel_id || '',
       tiktok_pixel_id: s.tiktok_pixel_id || '',
       fb_pixel_token: s.fb_pixel_token || '',
+      meta_ad_account_id: s.meta_ad_account_id || '',
     });
     setThumbPreview(s.url_thumb || '');
     setThumbError(false);
@@ -1314,6 +1315,7 @@ export default function Stores() {
         fb_pixel_id: form.fb_pixel_id || null,
         tiktok_pixel_id: form.tiktok_pixel_id || null,
         fb_pixel_token: form.fb_pixel_token || null,
+        meta_ad_account_id: form.meta_ad_account_id || null,
       };
       if (editing) {
         await api.put(`/admin/stores/${editing.id}`, payload);
@@ -1708,8 +1710,8 @@ export default function Stores() {
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Token da Conversions API (Facebook)</label>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Token da Conversions API / Marketing API (Facebook)</label>
                   <input
                     type="password"
                     value={form.fb_pixel_token}
@@ -1717,7 +1719,19 @@ export default function Stores() {
                     placeholder="vazio = usa o token padrão do servidor"
                     className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
                   />
-                  <p className="text-[11px] text-gray-500 mt-1">Token de Usuário do Sistema do Business Manager desta loja. Necessário apenas se o pixel pertence a um BM diferente do padrão.</p>
+                  <p className="text-[11px] text-gray-500 mt-1">Token do Usuário do Sistema do Business Manager desta loja (cobre pixel + gastos de anúncios).</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Meta Ad Account ID</label>
+                  <input
+                    type="text"
+                    value={form.meta_ad_account_id}
+                    onChange={(e) => setForm(f => ({ ...f, meta_ad_account_id: e.target.value }))}
+                    placeholder="ex: act_1262674127799201"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">ID da conta de anúncios do Business Manager desta loja. O dashboard somará o gasto de todas as lojas configuradas.</p>
                 </div>
                 </div>
 
