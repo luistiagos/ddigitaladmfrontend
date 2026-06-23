@@ -110,7 +110,9 @@ export default function Dashboard() {
     setLoadingFb(true);
     setFbSpend(null);
     setFbError('');
-    api.get(`/admin/meta/ad-spend?since=${startDate}&until=${endDate}`)
+    const params = new URLSearchParams({ since: startDate, until: endDate });
+    if (selectedStoreId) params.set('store_id', selectedStoreId);
+    api.get(`/admin/meta/ad-spend?${params}`)
       .then((r) => {
         const data = r.data || {};
         if (!data.configured) { setMetaOk(false); return; }
@@ -124,7 +126,7 @@ export default function Dashboard() {
         setFbError(e.response?.data?.error || e.message || 'Erro ao buscar dados do Meta');
       })
       .finally(() => setLoadingFb(false));
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedStoreId]);
 
   const approvedTotal = stats?.approved_total || 0;                       // bruto
   const approvedNet = stats?.approved_total_net ?? stats?.approved_total ?? 0; // líquido
