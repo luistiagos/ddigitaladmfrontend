@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, MessageSquareQuote, RefreshCw, Send } from 'lucide-react';
 import api from '@/services/api';
+import DetailModal from '@/components/ui/DetailModal';
 import Pagination from '@/components/ui/Pagination';
 import { EmptyRow, ErrorRow, LoadingRows } from '@/components/ui/TableStates';
 import { formatDateTime } from '@/utils/format';
@@ -42,6 +43,7 @@ export default function WhatsAppConsults() {
   const [answerText, setAnswerText] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [questionModal, setQuestionModal] = useState(null);
 
   useEffect(() => {
     api.get('/admin/wpp/agents')
@@ -212,7 +214,16 @@ export default function WhatsAppConsults() {
                 <td className="px-4 py-3 text-gray-300">{row.agent_name || '—'}</td>
                 <td className="px-4 py-3 text-gray-400 font-mono text-xs">{row.client_jid || '—'}</td>
                 <td className="px-4 py-3 text-gray-200 max-w-95">
-                  <p className="line-clamp-4 whitespace-pre-wrap">{row.question || '—'}</p>
+                  {row.question ? (
+                    <button
+                      type="button"
+                      onClick={() => setQuestionModal({ title: `Pergunta #${row.id}`, text: row.question })}
+                      className="block w-full text-left line-clamp-4 whitespace-pre-wrap text-violet-300 hover:text-violet-200 hover:underline transition-colors"
+                      title="Ver pergunta completa"
+                    >
+                      {row.question}
+                    </button>
+                  ) : '—'}
                 </td>
                 <td className="px-4 py-3 text-gray-300 max-w-95">
                   <p className="line-clamp-4 whitespace-pre-wrap">{row.owner_response || '—'}</p>
@@ -235,6 +246,14 @@ export default function WhatsAppConsults() {
       </div>
 
       <Pagination page={page} perPage={PER_PAGE} total={total} onChange={setPage} />
+
+      {questionModal && (
+        <DetailModal
+          title={questionModal.title}
+          text={questionModal.text}
+          onClose={() => setQuestionModal(null)}
+        />
+      )}
 
       {answering && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
