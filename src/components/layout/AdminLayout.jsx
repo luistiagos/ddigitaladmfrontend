@@ -26,8 +26,11 @@ import {
   ChevronDown,
   Send as SendIcon,
   Activity,
+  HeartPulse,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import api from '@/services/api';
 import SendProductModal from '@/modals/SendProductModal';
 import SendMemberAreaLinkModal from '@/modals/SendMemberAreaLinkModal';
 
@@ -76,6 +79,7 @@ const NAV_GROUPS = [
     key: 'sistema',
     label: 'Sistema',
     items: [
+      { to: '/saude',         label: 'Saúde',         icon: HeartPulse },
       { to: '/configuracoes', label: 'Configurações', icon: Settings2 },
       { to: '/erros',         label: 'Log de Erros',  icon: TriangleAlert },
     ],
@@ -143,6 +147,33 @@ export default function AdminLayout() {
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [memberLinkModalOpen, setMemberLinkModalOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState(() => getInitialOpen(location.pathname));
+  const [health, setHealth] = useState(null);
+
+  // Polling de saúde da infra: alimenta o banner vermelho global. Best-effort —
+  // qualquer falha é ignorada (nunca bloqueia o painel). /healthz é público e devolve
+  // 503 quando algo crítico está down (o corpo JSON vem nos dois casos).
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      try {
+        const res = await api.get('/healthz', { validateStatus: (s) => s === 200 || s === 503 });
+        if (active) setHealth(res.data);
+      } catch { /* ignora */ }
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+
+  const HEALTH_LABELS = {
+    db: 'Banco', mp_token: 'Mercado Pago (token)', mp_public_key: 'Checkout (public key)',
+    stripe: 'Stripe', evolution: 'WhatsApp', recent_sales: 'Vendas',
+    deployed_checkout_key: 'Checkout publicado', sendgrid: 'E-mail',
+  };
+  const healthDegraded = health?.status === 'degraded';
+  const healthDown = healthDegraded
+    ? Object.entries(health.checks || {}).filter(([, ok]) => !ok).map(([k]) => HEALTH_LABELS[k] || k)
+    : [];
 
   // Auto-expand the group that owns the current route
   useEffect(() => {
@@ -300,6 +331,21 @@ export default function AdminLayout() {
             <LogOut className="h-4 w-4" />
           </button>
         </header>
+
+        {/* Banner global de saúde — aparece sempre que algo crítico está down */}
+        {healthDegraded && (
+          <button
+            type="button"
+            onClick={() => navigate('/saude')}
+            className="flex items-center gap-3 w-full text-left px-4 py-3 bg-red-600 hover:bg-red-700 text-white shrink-0 animate-pulse"
+          >
+            <ShieldAlert className="h-5 w-5 shrink-0" />
+            <span className="text-sm font-semibold">
+              Infra com problema: {healthDown.join(', ')}.
+            </span>
+            <span className="ml-auto text-xs underline whitespace-nowrap">Ver painel de saúde →</span>
+          </button>
+        )}
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">

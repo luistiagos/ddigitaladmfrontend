@@ -20,6 +20,7 @@ import WhatsAppConsults from '@/pages/WhatsAppConsults';
 import EmailActivity from '@/pages/EmailActivity';
 import EmailQueue from '@/pages/EmailQueue';
 import ErrorLog from '@/pages/ErrorLog';
+import Health from '@/pages/Health';
 import RemarketingCampaigns from '@/pages/RemarketingCampaigns';
 import RemarketingWorkflows from '@/pages/RemarketingWorkflows';
 import WhatsAppSenderConfig from '@/pages/WhatsAppSenderConfig';
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="remarketing/workflows" element={<RemarketingWorkflows />} />
             <Route path="remarketing/whatsapp-sender" element={<WhatsAppSenderConfig />} />
             <Route path="erros" element={<ErrorLog />} />
+            <Route path="saude" element={<Health />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
