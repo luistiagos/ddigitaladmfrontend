@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Copy,
   ArrowRight,
+  Clock,
 } from 'lucide-react';
 import api from '@/services/api';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -368,6 +369,85 @@ function CopyStepsPicker({ targetStore, allStores, onClose, onCopied }) {
   );
 }
 
+function pad2(h) {
+  return `${String(Number(h) || 0).padStart(2, '0')}:00`;
+}
+
+function CampaignWindowEditor({ storeId, initialStart, initialEnd }) {
+  const [start, setStart] = useState(initialStart ?? 9);
+  const [end, setEnd] = useState(initialEnd ?? 20);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  async function save() {
+    setErr('');
+    setMsg('');
+    const s = Number(start);
+    const e = Number(end);
+    if (!(Number.isInteger(s) && Number.isInteger(e) && s >= 0 && s <= 23 && e >= 1 && e <= 24 && s < e)) {
+      setErr('Janela inválida: 0 ≤ início < fim ≤ 24.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.put(`/admin/remarket/stores/${storeId}/window`, { start_hour: s, end_hour: e });
+      setMsg('Janela salva.');
+    } catch (e2) {
+      setErr(e2.response?.data?.error || 'Erro ao salvar janela.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="border border-gray-700 rounded-xl p-3 bg-gray-700/20">
+      <div className="flex items-center gap-2 mb-2">
+        <Clock className="h-4 w-4 text-violet-400" />
+        <span className="text-sm font-medium text-white">Janela de envio (BRT)</span>
+        <span className="text-[11px] text-gray-500">vale para todos os canais desta campanha</span>
+      </div>
+      <div className="flex items-end gap-3 flex-wrap">
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Início (h)</label>
+          <input
+            type="number"
+            min="0"
+            max="23"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className={`${inputCls} w-20`}
+          />
+        </div>
+        <span className="text-gray-500 pb-2">às</span>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Fim (h)</label>
+          <input
+            type="number"
+            min="1"
+            max="24"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            className={`${inputCls} w-20`}
+          />
+        </div>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white transition-colors"
+        >
+          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Salvar janela
+        </button>
+        <span className="text-[11px] text-gray-500 pb-2">
+          {pad2(start)}–{pad2(end)} · fora disso, o envio é adiado para o próximo início
+        </span>
+      </div>
+      {err && <p className="text-xs text-red-400 mt-2">{err}</p>}
+      {msg && <p className="text-xs text-green-400 mt-2">{msg}</p>}
+    </div>
+  );
+}
+
 function CampaignStepsModal({ store, allStores, onClose }) {
   const [steps, setSteps] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -546,6 +626,12 @@ function CampaignStepsModal({ store, allStores, onClose }) {
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
+          <CampaignWindowEditor
+            storeId={store.store_id}
+            initialStart={store.window_start_hour}
+            initialEnd={store.window_end_hour}
+          />
+
           {loading && (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-violet-400" />
@@ -815,6 +901,11 @@ export default function RemarketingCampaigns() {
                     <MessageCircle className="h-3 w-3" /> {s.whatsapp_steps}
                   </span>
                 )}
+              </div>
+
+              <div className="mt-2 flex items-center gap-1 text-[11px] text-gray-500">
+                <Clock className="h-3 w-3" />
+                Janela {pad2(s.window_start_hour ?? 9)}–{pad2(s.window_end_hour ?? 20)}
               </div>
             </button>
           ))}
