@@ -1207,7 +1207,7 @@ function StoreFaqModal({ store, onClose }) {
 // Stores page
 // ---------------------------------------------------------------------------
 
-const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '', fb_pixel_id: '', tiktok_pixel_id: '', fb_pixel_token: '', meta_ad_account_id: '', meta_campaign_filter: '' };
+const EMPTY_FORM = { name: '', url_thumb: '', url_page: '', checkout_features: '', checkout_theme_color: '', checkout_whatsapp_text: '', checkout_headline_price: '', checkout_whatsapp: '', checkout_email: '', checkout_trust_seal_mercadopago: 1, checkout_trust_seal_ssl: 1, checkout_trust_seal_siteconfiavel: 1, checkout_logo_label: '', checkout_logo_url: '', fb_pixel_id: '', tiktok_pixel_id: '', fb_pixel_token: '', meta_ad_account_id: '', meta_campaign_filter: '', currency: '' };
 
 
 export default function Stores() {
@@ -1277,6 +1277,7 @@ export default function Stores() {
       fb_pixel_token: s.fb_pixel_token || '',
       meta_ad_account_id: s.meta_ad_account_id || '',
       meta_campaign_filter: s.meta_campaign_filter || '',
+      currency: s.currency || '',
     });
     setThumbPreview(s.url_thumb || '');
     setThumbError(false);
@@ -1318,6 +1319,7 @@ export default function Stores() {
         fb_pixel_token: form.fb_pixel_token || null,
         meta_ad_account_id: form.meta_ad_account_id || null,
         meta_campaign_filter: form.meta_campaign_filter || null,
+        currency: form.currency || null,
       };
       if (editing) {
         await api.put(`/admin/stores/${editing.id}`, payload);
@@ -1366,6 +1368,7 @@ export default function Stores() {
         checkout_trust_seal_siteconfiavel: s.checkout_trust_seal_siteconfiavel ?? 1,
         checkout_logo_label: s.checkout_logo_label || null,
         checkout_logo_url: s.checkout_logo_url || null,
+        currency: s.currency || null,
       };
       const res = await api.post(`/admin/stores/${s.id}/copy`, payload);
       const newStore = { ...payload, id: res.data.id };
@@ -1558,6 +1561,21 @@ export default function Stores() {
                     <option value="blue">Blue (Playstation - Azul)</option>
                     <option value="green">Green (Xbox - Verde Escuro)</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Moeda</label>
+                  <select
+                    value={form.currency || 'BRL'}
+                    onChange={(e) => setForm(f => ({ ...f, currency: e.target.value }))}
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-violet-500"
+                  >
+                    <option value="BRL">Real — BRL (PIX / Mercado Pago)</option>
+                    <option value="USD">Dólar — USD (Stripe)</option>
+                  </select>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Vazio = BRL. Em USD, os preços são exibidos em dólar e o pagamento usa Stripe.
+                  </p>
                 </div>
 
                 <div>
