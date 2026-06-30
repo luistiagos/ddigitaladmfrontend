@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert, Store } from 'lucide-react';
+import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert, Store, Percent } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '@/services/api';
 import { formatCurrency, todayISO } from '@/utils/format';
@@ -12,6 +12,7 @@ const COLORS = {
   red:    'text-red-400 bg-red-500/10',
   cyan:   'text-cyan-400 bg-cyan-500/10',
   orange: 'text-orange-400 bg-orange-500/10',
+  pink:   'text-pink-400 bg-pink-500/10',
 };
 
 function KpiCard({ icon, label, value, sub, color = 'violet' }) {
@@ -131,7 +132,8 @@ export default function Dashboard() {
   const approvedTotal = stats?.approved_total || 0;                       // bruto
   const approvedNet = stats?.approved_total_net ?? stats?.approved_total ?? 0; // líquido
   const mpFees = stats?.mp_fees_total ?? null;
-  const totalExpenses = (fbSpend ?? 0);
+  const fbFee = metaOk ? (fbSpend ?? 0) * 0.15 : null;
+  const totalExpenses = (fbSpend ?? 0) + (fbFee ?? 0);
   const hasExpenses = metaOk;
   const fbReady = metaOk && !loadingFb && !fbError;
   // Lucro com base no líquido (já descontadas as taxas do MP) menos despesas.
@@ -277,12 +279,21 @@ export default function Dashboard() {
               </Link>
             </div>
           ) : (
-            <KpiCard
-              icon={<Megaphone className="h-4 w-4" />}
-              label="Gasto Facebook Ads"
-              value={formatCurrency(fbSpend ?? 0)}
-              color="blue"
-            />
+            <>
+              <KpiCard
+                icon={<Megaphone className="h-4 w-4" />}
+                label="Gasto Facebook Ads"
+                value={formatCurrency(fbSpend ?? 0)}
+                color="blue"
+              />
+              <KpiCard
+                icon={<Percent className="h-4 w-4" />}
+                label="Taxa Facebook"
+                value={formatCurrency(fbFee ?? 0)}
+                sub="15% do Gasto Facebook Ads"
+                color="pink"
+              />
+            </>
           )}
 
           {/* MercadoPago */}
