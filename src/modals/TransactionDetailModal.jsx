@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Send, Loader2, CheckCircle, XCircle, Eye, MessageCircle, Pencil } from 'lucide-react';
+import { X, Send, Loader2, CheckCircle, XCircle, Eye, MessageCircle, Pencil, CreditCard } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import { formatDateTime, formatCurrency } from '@/utils/format';
@@ -57,7 +57,12 @@ export default function TransactionDetailModal({ transaction: initialTx, onClose
   const [savingDetails, setSavingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState('');
 
+  const [simulatingStripe, setSimulatingStripe] = useState(false);
+  const [stripeResult, setStripeResult] = useState(null);
+
   const showRemarketing = REMARKET_STATUSES.includes(tx.status) && tx.phone;
+  // Transações Stripe gravam o Checkout Session ('cs_...') no campo mpid.
+  const isStripe = typeof tx.mpid === 'string' && tx.mpid.startsWith('cs_');
 
   async function handleSaveDetails() {
     setDetailsError('');
@@ -135,6 +140,39 @@ export default function TransactionDetailModal({ transaction: initialTx, onClose
 
     setSending(false);
     setResults({ email: emailResult, whats: whatsResult });
+  }
+
+  async function handleSimulateStripe(force = false) {
+    setSimulatingStripe(true);
+    setStripeResult(null);
+    setWppError('');
+    try {
+      const res = await api.post(`/admin/simulate_stripe/${tx.id}`, { force });
+      const data = res.data || {};
+
+      // Sessão ainda não 'paid' ou não recuperável no Stripe → oferece forçar.
+      if (!data.ok && data.tip && !force) {
+        if (window.confirm(`${data.tip}\n\nForçar a entrega mesmo assim?`)) {
+          return await handleSimulateStripe(true);
+        }
+        setStripeResult({ success: false, message: data.tip });
+        return;
+      }
+
+      if (data.ok) {
+        setStripeResult({
+          success: true,
+          message: `Entrega disparada (status: ${data.payment_status || '—'}${data.forced ? ', forçado' : ''}).`,
+        });
+        if (onSaveSuccess) onSaveSuccess();
+      } else {
+        setStripeResult({ success: false, message: data.error || data.tip || 'Falha na simulação.' });
+      }
+    } catch (err) {
+      setStripeResult({ success: false, message: err.response?.data?.error || 'Erro ao simular notificação Stripe.' });
+    } finally {
+      setSimulatingStripe(false);
+    }
   }
 
   return (
@@ -264,6 +302,17 @@ export default function TransactionDetailModal({ transaction: initialTx, onClose
               )}
             </div>
           )}
+
+          {/* Stripe simulation result */}
+          {stripeResult && (
+            <div className="pt-1">
+              <ResultRow
+                label="Simulação Stripe"
+                result={stripeResult}
+                message={stripeResult.message}
+              />
+            </div>
+          )}
         </div>
 
         {/* WA Recovery error — outside scroll area so always visible */}
@@ -292,6 +341,18 @@ export default function TransactionDetailModal({ transaction: initialTx, onClose
             >
               {remarketing ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
               {remarketing ? 'Gerando…' : 'WA Recovery'}
+            </button>
+          )}
+          {isStripe && (
+            <button
+              type="button"
+              onClick={() => handleSimulateStripe(false)}
+              disabled={simulatingStripe}
+              title="Simular notificação de pagamento aprovado do Stripe (re-dispara a entrega)"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
+            >
+              {simulatingStripe ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+              {simulatingStripe ? 'Simulando…' : 'Simular Stripe'}
             </button>
           )}
           <button
