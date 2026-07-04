@@ -398,6 +398,8 @@ export default function Dashboard() {
                   <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Loja</th>
                   <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Vendas</th>
                   <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Total Bruto</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Total Despesas</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Lucro Bruto</th>
                 </tr>
               </thead>
               <tbody>
@@ -425,6 +427,12 @@ export default function Dashboard() {
                     </td>
                     <td className="px-5 py-3 text-right text-gray-200 font-medium">
                       {formatCurrency(row.total)}
+                    </td>
+                    <td className="px-5 py-3 text-right text-red-400">
+                      {formatCurrency(row.total_mp_fees)}
+                    </td>
+                    <td className={`px-5 py-3 text-right font-medium ${(row.total - row.total_mp_fees) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {formatCurrency(row.total - row.total_mp_fees)}
                     </td>
                   </tr>
                 ))}
