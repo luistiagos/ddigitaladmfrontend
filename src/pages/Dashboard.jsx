@@ -357,10 +357,15 @@ export default function Dashboard() {
                     <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Produto</th>
                     <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Vendas</th>
                     <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Total Bruto</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Total Despesas</th>
+                    <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">Lucro Bruto</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.sales_by_product.map((row, idx) => (
+                  {stats.sales_by_product.map((row, idx) => {
+                    const mpFee = row.total - row.total_net;
+                    const grossProfit = row.total_net;
+                    return (
                     <tr
                       key={row.product_id ?? idx}
                       className="border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 transition-colors"
@@ -379,8 +384,15 @@ export default function Dashboard() {
                       <td className="px-5 py-3 text-right text-gray-200 font-medium">
                         {formatCurrency(row.total)}
                       </td>
+                      <td className="px-5 py-3 text-right text-red-400">
+                        {formatCurrency(mpFee)}
+                      </td>
+                      <td className={`px-5 py-3 text-right font-medium ${grossProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatCurrency(grossProfit)}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
