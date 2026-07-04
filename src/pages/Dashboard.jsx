@@ -364,7 +364,11 @@ export default function Dashboard() {
                 <tbody>
                   {stats.sales_by_product.map((row, idx) => {
                     const mpFee = row.total - row.total_net;
-                    const grossProfit = row.total_net;
+                    const fbTotal = (fbSpend ?? 0) + (fbFee ?? 0);
+                    const storeTotalRevenue = stats.sales_by_product.reduce((s, p) => s + p.total, 0);
+                    const productFbShare = storeTotalRevenue > 0 ? (row.total / storeTotalRevenue) * fbTotal : 0;
+                    const totalDespesas = mpFee + productFbShare;
+                    const lucroBruto = row.total - totalDespesas;
                     return (
                     <tr
                       key={row.product_id ?? idx}
@@ -385,10 +389,10 @@ export default function Dashboard() {
                         {formatCurrency(row.total)}
                       </td>
                       <td className="px-5 py-3 text-right text-red-400">
-                        {formatCurrency(mpFee)}
+                        {formatCurrency(totalDespesas)}
                       </td>
-                      <td className={`px-5 py-3 text-right font-medium ${grossProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {formatCurrency(grossProfit)}
+                      <td className={`px-5 py-3 text-right font-medium ${lucroBruto >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatCurrency(lucroBruto)}
                       </td>
                     </tr>
                     );
@@ -415,7 +419,10 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {stats.sales_by_store.map((row, idx) => (
+                {stats.sales_by_store.map((row, idx) => {
+                  const totalDespesas = (row.total_mp_fees || 0) + (row.total_fb_spend || 0) + (row.total_fb_fee || 0);
+                  const lucroBruto = row.total - totalDespesas;
+                  return (
                   <tr
                     key={idx}
                     className="border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 transition-colors"
@@ -441,13 +448,14 @@ export default function Dashboard() {
                       {formatCurrency(row.total)}
                     </td>
                     <td className="px-5 py-3 text-right text-red-400">
-                      {formatCurrency(row.total_mp_fees)}
+                      {formatCurrency(totalDespesas)}
                     </td>
-                    <td className={`px-5 py-3 text-right font-medium ${(row.total - row.total_mp_fees) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatCurrency(row.total - row.total_mp_fees)}
+                    <td className={`px-5 py-3 text-right font-medium ${lucroBruto >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {formatCurrency(lucroBruto)}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
