@@ -364,6 +364,7 @@ export default function Dashboard() {
                 <tbody>
                   {stats.sales_by_product.map((row, idx) => {
                     const mpFee = row.total - row.total_net;
+                    // Force rebuild/redeploy to trigger GitHub Pages build
                     const fbTotal = (fbSpend ?? 0) + (fbFee ?? 0);
                     const storeTotalRevenue = stats.sales_by_product.reduce((s, p) => s + p.total, 0);
                     const productFbShare = storeTotalRevenue > 0 ? (row.total / storeTotalRevenue) * fbTotal : 0;
