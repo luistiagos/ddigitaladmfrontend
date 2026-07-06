@@ -378,6 +378,12 @@ export default function WhatsAppTelemetry() {
 
                             <span className="text-gray-400">Finish Reason (LLM):</span>
                             <span className="text-gray-200 font-mono text-xs">{detailData.finish_reason || '—'}</span>
+
+                            <span className="text-gray-400">Versão do Prompt:</span>
+                            <span className="text-gray-200 font-mono text-xs">{detailData.prompt_version || '—'}</span>
+
+                            <span className="text-gray-400">Arquivos do Prompt:</span>
+                            <span className="text-gray-200 font-mono text-xs whitespace-pre-wrap">{detailData.prompt_files || '—'}</span>
                           </div>
                         </div>
 
