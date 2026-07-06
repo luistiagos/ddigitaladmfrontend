@@ -24,6 +24,8 @@ import Health from '@/pages/Health';
 import RemarketingCampaigns from '@/pages/RemarketingCampaigns';
 import RemarketingWorkflows from '@/pages/RemarketingWorkflows';
 import WhatsAppSenderConfig from '@/pages/WhatsAppSenderConfig';
+import WhatsAppTelemetry from '@/pages/WhatsAppTelemetry';
+
 
 export default function App() {
   return (
@@ -53,6 +55,8 @@ export default function App() {
             <Route path="produtos" element={<Products />} />
             <Route path="whatsapp-sessoes" element={<WhatsAppSessions />} />
             <Route path="whatsapp-consultas" element={<WhatsAppConsults />} />
+            <Route path="whatsapp-telemetria" element={<WhatsAppTelemetry />} />
+
             <Route path="email-activity" element={<EmailActivity />} />
             <Route path="email-queue" element={<EmailQueue />} />
             <Route path="remarketing/campanhas" element={<RemarketingCampaigns />} />
