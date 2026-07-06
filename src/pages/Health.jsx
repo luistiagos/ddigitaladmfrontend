@@ -9,13 +9,14 @@ const LABELS = {
   stripe: 'Stripe',
   sendgrid: 'E-mail (SendGrid)',
   evolution: 'WhatsApp (Evolution)',
+  temporal: 'Temporal (Orquestrador/Worker)',
   recent_sales: 'Vendas (sinal de negócio)',
   deployed_checkout_key: 'Checkout publicado (cache)',
 };
 
 const ORDER = [
   'recent_sales', 'mp_token', 'mp_public_key', 'deployed_checkout_key',
-  'stripe', 'db', 'evolution', 'sendgrid',
+  'stripe', 'db', 'evolution', 'temporal', 'sendgrid',
 ];
 
 function isSkipped(detail) {
