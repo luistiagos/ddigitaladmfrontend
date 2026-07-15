@@ -111,6 +111,32 @@ export default function TransactionDetailModal({ transaction: initialTx, onClose
   }
 
   async function handleSend() {
+    if (tx.status !== 'approved' && !isStripe) {
+      if (!window.confirm('A compra não foi paga. Gostaria de enviar mesmo assim (simulando notificação de pagamento)?')) {
+        return;
+      }
+      setSending(true);
+      setResults(null);
+      setWppError('');
+      
+      try {
+        const prefId = tx.preference_id || tx.mpid;
+        const res = await api.get(`/simulate_notification_v2?preference_id=${prefId}`);
+        setResults({
+          email: { success: true, data: res.data },
+          whats: null
+        });
+      } catch (err) {
+        setResults({
+          email: { success: false, error: err.response?.data?.error || 'Erro ao simular notificação.' },
+          whats: null
+        });
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     setSending(true);
     setResults(null);
     setWppError('');
