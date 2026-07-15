@@ -29,6 +29,7 @@ const PAYMENT_TYPES = [
 const EMPTY_FILTERS = {
   email: '', phone: '', product_id: '', status: '',
   store_id: '', start_date: '', end_date: '', payment_type_id: '',
+  mpid: '',
 };
 
 export default function Transactions() {
@@ -58,6 +59,7 @@ export default function Transactions() {
       if (applied.product_id) params.set('product_id', applied.product_id);
       if (applied.status) params.set('status', applied.status);
       if (applied.payment_type_id) params.set('payment_type_id', applied.payment_type_id);
+      if (applied.mpid) params.set('mpid', applied.mpid);
       if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
@@ -157,6 +159,11 @@ export default function Transactions() {
             placeholder="Telefone"
             value={filters.phone}
             onChange={(v) => setFilters((f) => ({ ...f, phone: v }))}
+          />
+          <TxtInput
+            placeholder="MP ID"
+            value={filters.mpid}
+            onChange={(v) => setFilters((f) => ({ ...f, mpid: v }))}
           />
           <select
             value={filters.product_id}
