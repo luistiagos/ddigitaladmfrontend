@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle, Eye, Activity, KeyRound, Save, Trash2, Plus } from 'lucide-react';
+import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle, Eye, Activity, KeyRound, Save, Trash2, Plus, X } from 'lucide-react';
 import api from '@/services/api';
 
 function DiagStep({ step }) {
@@ -44,6 +44,12 @@ export default function BotConfig() {
   const [webhookChecking, setWebhookChecking] = useState(false);
   const [webhookFixing, setWebhookFixing] = useState(false);
   const [webhookMessage, setWebhookMessage] = useState(null);
+
+  const [resetting, setResetting] = useState(false);
+  const [qrCode, setQrCode] = useState(null);
+  const [resetLogs, setResetLogs] = useState([]);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetError, setResetError] = useState('');
 
   // ── Visão (leitura de imagens) ──
   const [vision, setVision] = useState(null);            // config mascarada do backend
@@ -209,6 +215,28 @@ export default function BotConfig() {
       });
     } finally {
       setWebhookFixing(false);
+    }
+  }
+
+  async function handleResetWpp() {
+    setResetting(true);
+    setQrCode(null);
+    setResetLogs([]);
+    setResetError('');
+    try {
+      const res = await api.post('/admin/wpp/reset-instance');
+      if (res.data.success) {
+        setQrCode(res.data.qrcode);
+        setResetLogs(res.data.logs || []);
+        checkWebhook();
+      } else {
+        setResetError(res.data.error || 'Erro ao resetar instância do WhatsApp.');
+        setResetLogs(res.data.logs || []);
+      }
+    } catch (err) {
+      setResetError('Erro de rede ou permissão ao tentar resetar o WhatsApp.');
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -638,12 +666,21 @@ export default function BotConfig() {
                 <RefreshCw className={`h-4 w-4 ${webhookChecking ? 'animate-spin' : ''}`} />
               </button>
               <button
+                type="button"
                 onClick={fixWebhook}
                 disabled={webhookFixing}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition"
               >
                 {webhookFixing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Webhook className="h-3.5 w-3.5" />}
                 {webhookFixing ? 'Reiniciando...' : 'Reiniciar webhook'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowResetModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 text-xs font-medium transition"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Resetar instância
               </button>
             </div>
           </div>
@@ -734,6 +771,85 @@ export default function BotConfig() {
           )}
         </div>
       </div>
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+          <div className="w-full max-w-md bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-6">
+            <div className="mb-5 flex justify-between items-center">
+              <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                <Activity className="h-4 w-4 text-violet-400" />
+                Resetar Instância do WhatsApp
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResetModal(false);
+                  setQrCode(null);
+                  setResetLogs([]);
+                  setResetError('');
+                }}
+                className="p-1 rounded-lg text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {resetting ? (
+              <div className="py-8 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+                <p className="text-sm text-gray-400">Recriando instância e registrando webhooks...</p>
+                <div className="w-full mt-4 max-h-32 overflow-y-auto bg-gray-900 rounded p-2 text-[10px] font-mono text-gray-500">
+                  {resetLogs.map((log, i) => (
+                    <div key={i}>{log}</div>
+                  ))}
+                </div>
+              </div>
+            ) : qrCode ? (
+              <div className="flex flex-col items-center justify-center gap-4">
+                <p className="text-xs text-green-400 text-center font-semibold">
+                  Instância recriada com sucesso! Escaneie o QR Code abaixo com o WhatsApp do suporte:
+                </p>
+                <div className="bg-white p-2 rounded-lg">
+                  <img src={qrCode} alt="WhatsApp QR Code" className="w-64 h-64" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(false)}
+                  className="w-full py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-sm font-semibold transition-colors"
+                >
+                  Concluir
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-gray-300 mb-4">
+                  Esta ação irá apagar a sessão atual do WhatsApp na Evolution API, recriá-la e registrar novamente os webhooks de integração.
+                </p>
+                <p className="text-xs text-amber-400 mb-4 flex items-start gap-1.5">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                  Será necessário escanear um novo QR Code para parear o aparelho.
+                </p>
+                {resetError && <p className="text-sm text-red-400 mb-4">{resetError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetModal(false)}
+                    className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetWpp}
+                    className="px-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold transition-colors"
+                  >
+                    Confirmar Reset
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
