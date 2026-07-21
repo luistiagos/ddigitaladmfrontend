@@ -169,8 +169,8 @@ export default function AdminLayout() {
 
   const HEALTH_LABELS = {
     db: 'Banco', mp_token: 'Mercado Pago (token)', mp_public_key: 'Checkout (public key)',
-    stripe: 'Stripe', evolution: 'WhatsApp', temporal: 'Temporal', recent_sales: 'Vendas',
-    deployed_checkout_key: 'Checkout publicado', sendgrid: 'E-mail',
+    stripe: 'Stripe', evolution: 'WhatsApp', temporal: 'Temporal', deepseek: 'DeepSeek',
+    recent_sales: 'Vendas', deployed_checkout_key: 'Checkout publicado', sendgrid: 'E-mail',
   };
   const healthDegraded = health?.status === 'degraded';
   const healthDown = healthDegraded
