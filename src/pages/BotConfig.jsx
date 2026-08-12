@@ -45,6 +45,14 @@ export default function BotConfig() {
   const [webhookFixing, setWebhookFixing] = useState(false);
   const [webhookMessage, setWebhookMessage] = useState(null);
 
+  // ── Linha de teste do dono: alertas de sistema + purga da sessão ──
+  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [ownerJid, setOwnerJid] = useState('');
+  const [alertsStatus, setAlertsStatus] = useState('idle'); // idle | saving | saved | error
+  const [purging, setPurging] = useState(false);
+  const [purgeConfirm, setPurgeConfirm] = useState(false);
+  const [purgeResult, setPurgeResult] = useState(null);     // {type, text}
+
   const [resetting, setResetting] = useState(false);
   const [qrCode, setQrCode] = useState(null);
   const [resetLogs, setResetLogs] = useState([]);
@@ -68,9 +76,53 @@ export default function BotConfig() {
     api.get('/admin/wpp/bot_status')
       .then((res) => setBotEnabled(res.data.bot_enabled ?? true))
       .catch(() => {});
+    api.get('/admin/wpp/owner_alerts')
+      .then((res) => {
+        setAlertsEnabled(res.data.wpp_alerts_enabled ?? true);
+        setOwnerJid(res.data.owner_jid || '');
+      })
+      .catch(() => {});
     checkWebhook();
     loadVision();
   }, []);
+
+  async function toggleOwnerAlerts() {
+    const newValue = !alertsEnabled;
+    setAlertsEnabled(newValue);
+    setAlertsStatus('saving');
+    try {
+      await api.post('/admin/wpp/owner_alerts', { wpp_alerts_enabled: newValue });
+      setAlertsStatus('saved');
+      setTimeout(() => setAlertsStatus('idle'), 3000);
+    } catch {
+      setAlertsEnabled(!newValue);
+      setAlertsStatus('error');
+      setTimeout(() => setAlertsStatus('idle'), 3000);
+    }
+  }
+
+  async function purgeOwnerHistory() {
+    setPurging(true);
+    setPurgeResult(null);
+    try {
+      const res = await api.post('/admin/wpp/purge_owner_history', { confirm: true });
+      const total = res.data.total_deleted ?? 0;
+      setPurgeResult({
+        type: 'success',
+        text: total > 0
+          ? `Sessão zerada: ${total} registro(s) apagado(s). Pode testar do zero.`
+          : 'Nada a apagar — a sessão já estava limpa.',
+      });
+      setPurgeConfirm(false);
+    } catch (err) {
+      setPurgeResult({
+        type: 'error',
+        text: err.response?.data?.error || 'Erro ao limpar o histórico.',
+      });
+    } finally {
+      setPurging(false);
+    }
+  }
 
   async function loadVision() {
     try {
@@ -326,6 +378,109 @@ export default function BotConfig() {
                 botEnabled ? 'translate-x-6' : 'translate-x-1'
               }`} />
             </button>
+          </div>
+        </div>
+
+        {/* ── Linha de teste do dono ── */}
+        <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
+          <div className="mb-1">
+            <h2 className="text-base font-semibold text-white flex items-center gap-2">
+              <PhoneCall className="h-4 w-4 text-sky-400" />
+              Linha de teste (WhatsApp do dono)
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Seu número acumula duas funções que brigam: canal de alertas e telefone de
+              teste. Os alertas entram no histórico da conversa e o agente os lê como
+              contexto — o que corrompe qualquer teste feito por aqui.
+              {ownerJid && (
+                <span className="ml-1 text-gray-600 font-mono">({ownerJid})</span>
+              )}
+            </p>
+          </div>
+
+          {/* Alertas de sistema no WhatsApp */}
+          <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
+            <div className="pr-4">
+              <p className={`text-sm font-medium ${alertsEnabled ? 'text-gray-200' : 'text-amber-400'}`}>
+                {alertsEnabled ? 'Alertas de sistema ativos' : 'Alertas de sistema silenciados'}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                SLA violado, consultas pendentes, pedidos de apoio e status da infra.
+                Silenciar afeta <strong className="text-gray-400">somente o WhatsApp</strong> —
+                os alertas por e-mail continuam chegando normalmente.
+              </p>
+              {alertsStatus === 'saving' && <p className="text-xs text-gray-500 mt-1.5">Salvando…</p>}
+              {alertsStatus === 'saved'  && <p className="text-xs text-green-400 mt-1.5">✓ Configuração salva</p>}
+              {alertsStatus === 'error'  && <p className="text-xs text-red-400 mt-1.5">Erro ao salvar</p>}
+            </div>
+            <button
+              type="button"
+              onClick={toggleOwnerAlerts}
+              disabled={alertsStatus === 'saving'}
+              aria-label={alertsEnabled ? 'Silenciar alertas no WhatsApp' : 'Reativar alertas no WhatsApp'}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:opacity-50 ${
+                alertsEnabled ? 'bg-green-500' : 'bg-gray-600'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                alertsEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+
+          {/* Limpar histórico da linha do dono */}
+          <div className="pt-4">
+            <p className="text-sm font-medium text-gray-200">Zerar a sessão para testar do início</p>
+            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+              Apaga o histórico de mensagens e o estado da conversa (agente fixado, estado de
+              compra, modo manual, escalonamento) <strong className="text-gray-400">apenas do
+              seu número</strong>. A próxima mensagem é tratada como primeiro contato.
+              Conversas de clientes não são afetadas. Não tem como desfazer.
+            </p>
+
+            {!purgeConfirm ? (
+              <button
+                type="button"
+                onClick={() => { setPurgeConfirm(true); setPurgeResult(null); }}
+                disabled={purging}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Limpar histórico da minha linha
+              </button>
+            ) : (
+              <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3">
+                <p className="text-sm text-red-200 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  Apagar todo o histórico e o estado de conversa do seu número? Não tem volta.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={purgeOwnerHistory}
+                    disabled={purging}
+                    className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+                  >
+                    {purging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    {purging ? 'Limpando…' : 'Sim, apagar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPurgeConfirm(false)}
+                    disabled={purging}
+                    className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-700/50 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {purgeResult && (
+              <p className={`text-xs mt-2.5 ${purgeResult.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                {purgeResult.text}
+              </p>
+            )}
           </div>
         </div>
 
