@@ -9,6 +9,7 @@ import Clients from '@/pages/Clients';
 import Sales from '@/pages/Sales';
 import Disputes from '@/pages/Disputes';
 import Leads from '@/pages/Leads';
+import LeadsDashboard from '@/pages/LeadsDashboard';
 import Settings from '@/pages/Settings';
 import Coupons from '@/pages/Coupons';
 import Transactions from '@/pages/Transactions';
@@ -47,6 +48,8 @@ export default function App() {
             <Route path="vendas" element={<Sales />} />
             <Route path="disputas" element={<Disputes />} />
             <Route path="leads" element={<Leads />} />
+            <Route path="leads/dashboard" element={<LeadsDashboard />} />
+            <Route path="leads-dashboard" element={<LeadsDashboard />} />
             <Route path="configuracoes" element={<Settings />} />
             <Route path="bot" element={<BotConfig />} />
             <Route path="cupons" element={<Coupons />} />

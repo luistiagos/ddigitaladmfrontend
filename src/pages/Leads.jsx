@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, Eye } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, X, Eye, Layers } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
 import AdminGrid from '@/components/ui/AdminGrid';
@@ -143,9 +144,20 @@ export default function Leads() {
           onChange={fetchData}
         />
       )}
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white">Leads</h1>
-        <p className="text-sm text-gray-400 mt-1">Visitantes e potenciais clientes</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-xl font-semibold text-white">Leads</h1>
+          <p className="text-sm text-gray-400 mt-1">Visitantes e potenciais clientes</p>
+        </div>
+        <div>
+          <Link
+            to="/leads/dashboard"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors shadow-sm"
+          >
+            <Layers className="h-4 w-4" />
+            Ver Dashboard &amp; Funil
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
