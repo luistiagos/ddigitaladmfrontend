@@ -81,13 +81,25 @@ export default function LeadsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Active series toggles for chart
+  // Chart view mode: 'rates' (Taxas de Conversão %) | 'volumes' (Volume dos Estágios)
+  const [chartTab, setChartTab] = useState('rates');
+
+  // Active series toggles for volumes chart
   const [visibleSeries, setVisibleSeries] = useState({
     PageView: true,
     AddToCart: true,
     Lead: true,
     InitiateCheckout: true,
     Purchase: true,
+  });
+
+  // Active rate series toggles for conversion rates chart
+  const [visibleRateSeries, setVisibleRateSeries] = useState({
+    pageview_to_cart_pct: true,
+    cart_to_lead_pct: true,
+    lead_to_initiate_pct: true,
+    initiate_to_purchase_pct: true,
+    overall_conversion_pct: true,
   });
 
   // Fetch stores list
@@ -247,6 +259,14 @@ export default function LeadsDashboard() {
     { key: 'Purchase', label: 'Purchase', color: '#10b981', bgClass: 'bg-emerald-500' },
   ];
 
+  const rateSeriesMeta = [
+    { key: 'pageview_to_cart_pct', label: 'Taxa de Clique na Oferta (PV ➔ Cart)', shortLabel: 'Clique na Oferta', color: '#a855f7', bgClass: 'bg-purple-500' },
+    { key: 'cart_to_lead_pct', label: 'Taxa de Captura de Lead (Cart ➔ Lead)', shortLabel: 'Captura de Lead', color: '#06b6d4', bgClass: 'bg-cyan-500' },
+    { key: 'lead_to_initiate_pct', label: 'Taxa de Início de Checkout (Lead ➔ Checkout)', shortLabel: 'Início de Checkout', color: '#f59e0b', bgClass: 'bg-amber-500' },
+    { key: 'initiate_to_purchase_pct', label: 'Conversão de Pagamento (Checkout ➔ Purchase)', shortLabel: 'Conv. Pagamento', color: '#10b981', bgClass: 'bg-emerald-500' },
+    { key: 'overall_conversion_pct', label: 'Conversão Geral (PV ➔ Purchase)', shortLabel: 'Conversão Geral', color: '#8b5cf6', bgClass: 'bg-violet-500' },
+  ];
+
   function getSeriesValue(item, key) {
     if (!item) return 0;
     if (key === 'PageView') return item.pageview_count || 0;
@@ -259,7 +279,13 @@ export default function LeadsDashboard() {
     return 0;
   }
 
-  // Chart max value calculation
+  function getRateSeriesValue(item, key) {
+    if (!item) return 0;
+    const v = item[key];
+    return typeof v === 'number' ? v : 0;
+  }
+
+  // Chart max value calculation for volumes
   const chartMax = useMemo(() => {
     if (!timeSeries.length) return 100;
     let max = 0;
@@ -273,6 +299,21 @@ export default function LeadsDashboard() {
     }
     return max > 0 ? max * 1.15 : 100;
   }, [timeSeries, visibleSeries]);
+
+  // Chart max value calculation for rates (%)
+  const rateChartMax = useMemo(() => {
+    if (!timeSeries.length) return 100;
+    let max = 0;
+    for (const item of timeSeries) {
+      for (const s of rateSeriesMeta) {
+        if (visibleRateSeries[s.key]) {
+          const val = getRateSeriesValue(item, s.key);
+          if (val > max) max = val;
+        }
+      }
+    }
+    return Math.max(100, Math.ceil((max * 1.1) / 10) * 10);
+  }, [timeSeries, visibleRateSeries]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -618,73 +659,223 @@ export default function LeadsDashboard() {
           })}
         </div>
 
-        {/* Drop-off Callout Bar */}
-        <div className="mt-6 bg-gray-900/60 border border-gray-800 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-          <div>
-            <span className="text-gray-500 block text-[11px]">Taxa de Clique na Oferta</span>
-            <span className="text-sm font-bold text-purple-300">
+        {/* Drop-off Callout Bar (Interactive) */}
+        <div className="mt-6 bg-gray-900/60 border border-gray-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          <button
+            type="button"
+            onClick={() => {
+              setChartTab('rates');
+              setVisibleRateSeries({
+                pageview_to_cart_pct: true,
+                cart_to_lead_pct: false,
+                lead_to_initiate_pct: false,
+                initiate_to_purchase_pct: false,
+                overall_conversion_pct: false,
+              });
+            }}
+            className="text-left p-2.5 rounded-xl border border-transparent hover:border-purple-500/40 hover:bg-gray-800/60 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 font-medium block text-[11px]">Taxa de Clique na Oferta</span>
+              <span className="text-[10px] text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver gráfico →</span>
+            </div>
+            <div className="text-base sm:text-lg font-black text-purple-300 mt-0.5">
               {loading ? '—' : `${rates.pageview_to_cart_pct}%`}
-            </span>
-            <span className="text-[10px] text-gray-500 block">PageView ➔ AddToCart</span>
-          </div>
-          <div>
-            <span className="text-gray-500 block text-[11px]">Taxa de Captura de Lead</span>
-            <span className="text-sm font-bold text-cyan-300">
+            </div>
+            <span className="text-[10px] text-gray-500 block mt-0.5">PageView ➔ AddToCart</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setChartTab('rates');
+              setVisibleRateSeries({
+                pageview_to_cart_pct: false,
+                cart_to_lead_pct: true,
+                lead_to_initiate_pct: false,
+                initiate_to_purchase_pct: false,
+                overall_conversion_pct: false,
+              });
+            }}
+            className="text-left p-2.5 rounded-xl border border-transparent hover:border-cyan-500/40 hover:bg-gray-800/60 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 font-medium block text-[11px]">Taxa de Captura de Lead</span>
+              <span className="text-[10px] text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver gráfico →</span>
+            </div>
+            <div className="text-base sm:text-lg font-black text-cyan-300 mt-0.5">
               {loading ? '—' : `${rates.cart_to_lead_pct}%`}
-            </span>
-            <span className="text-[10px] text-gray-500 block">AddToCart ➔ Lead</span>
-          </div>
-          <div>
-            <span className="text-gray-500 block text-[11px]">Taxa de Início de Checkout</span>
-            <span className="text-sm font-bold text-amber-300">
+            </div>
+            <span className="text-[10px] text-gray-500 block mt-0.5">AddToCart ➔ Lead</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setChartTab('rates');
+              setVisibleRateSeries({
+                pageview_to_cart_pct: false,
+                cart_to_lead_pct: false,
+                lead_to_initiate_pct: true,
+                initiate_to_purchase_pct: false,
+                overall_conversion_pct: false,
+              });
+            }}
+            className="text-left p-2.5 rounded-xl border border-transparent hover:border-amber-500/40 hover:bg-gray-800/60 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 font-medium block text-[11px]">Taxa de Início de Checkout</span>
+              <span className="text-[10px] text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver gráfico →</span>
+            </div>
+            <div className="text-base sm:text-lg font-black text-amber-300 mt-0.5">
               {loading ? '—' : `${rates.lead_to_initiate_pct}%`}
-            </span>
-            <span className="text-[10px] text-gray-500 block">Lead ➔ InitiateCheckout</span>
-          </div>
-          <div>
-            <span className="text-gray-500 block text-[11px]">Conversão de Pagamento PIX/Cartão</span>
-            <span className="text-sm font-bold text-emerald-300">
+            </div>
+            <span className="text-[10px] text-gray-500 block mt-0.5">Lead ➔ InitiateCheckout</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setChartTab('rates');
+              setVisibleRateSeries({
+                pageview_to_cart_pct: false,
+                cart_to_lead_pct: false,
+                lead_to_initiate_pct: false,
+                initiate_to_purchase_pct: true,
+                overall_conversion_pct: false,
+              });
+            }}
+            className="text-left p-2.5 rounded-xl border border-transparent hover:border-emerald-500/40 hover:bg-gray-800/60 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 font-medium block text-[11px]">Conversão de Pagamento PIX/Cartão</span>
+              <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver gráfico →</span>
+            </div>
+            <div className="text-base sm:text-lg font-black text-emerald-300 mt-0.5">
               {loading ? '—' : `${rates.initiate_to_purchase_pct}%`}
-            </span>
-            <span className="text-[10px] text-gray-500 block">InitiateCheckout ➔ Purchase</span>
-          </div>
+            </div>
+            <span className="text-[10px] text-gray-500 block mt-0.5">InitiateCheckout ➔ Purchase</span>
+          </button>
         </div>
       </div>
 
       {/* Time Series Evolution Chart */}
-      <div className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+      <div className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-violet-400" />
-              Evolução Temporal dos Estágios ({groupBy === 'daily' ? 'Diário' : groupBy === 'weekly' ? 'Semanal' : 'Mensal'})
+              {chartTab === 'rates' ? 'Evolução das Taxas de Conversão (%)' : 'Evolução dos Volumes dos Estágios'}{' '}
+              <span className="text-xs font-normal text-gray-400">
+                ({groupBy === 'daily' ? 'Diário' : groupBy === 'weekly' ? 'Semanal' : 'Mensal'})
+              </span>
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Acompanhamento cronológico do volume de acessos, contatos e conversões
+              {chartTab === 'rates'
+                ? 'Acompanhamento cronológico do percentual de avanço entre cada etapa do funil'
+                : 'Acompanhamento cronológico da quantidade de acessos, contatos e conversões'}
             </p>
           </div>
 
-          {/* Interactive Series Toggles */}
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            {seriesMeta.map((s) => {
-              const active = visibleSeries[s.key];
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => setVisibleSeries((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
-                    active
-                      ? 'bg-gray-900 border-gray-600 text-gray-200 shadow-sm'
-                      : 'bg-gray-900/30 border-gray-800 text-gray-600 opacity-60'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${s.bgClass}`} />
-                  {s.label}
-                </button>
-              );
-            })}
+          {/* Mode Switcher Tabs (Rates vs Volumes) */}
+          <div className="flex items-center bg-gray-900/90 p-1 rounded-xl border border-gray-700/70 shrink-0 self-start">
+            <button
+              type="button"
+              onClick={() => setChartTab('rates')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                chartTab === 'rates'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <Percent className="h-3.5 w-3.5" />
+              Taxas de Conversão (%)
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartTab('volumes')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                chartTab === 'volumes'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              Volume dos Estágios (Qtd)
+            </button>
           </div>
+        </div>
+
+        {/* Interactive Series Toggles */}
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-gray-700/50">
+          <div className="flex items-center gap-1.5 flex-wrap text-xs">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">
+              Séries no Gráfico:
+            </span>
+            {chartTab === 'rates'
+              ? rateSeriesMeta.map((s) => {
+                  const active = visibleRateSeries[s.key];
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setVisibleRateSeries((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+                        active
+                          ? 'bg-gray-900 border-gray-600 text-gray-200 shadow-sm'
+                          : 'bg-gray-900/30 border-gray-800 text-gray-600 opacity-60'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${s.bgClass}`} />
+                      {s.shortLabel}
+                    </button>
+                  );
+                })
+              : seriesMeta.map((s) => {
+                  const active = visibleSeries[s.key];
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setVisibleSeries((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+                        active
+                          ? 'bg-gray-900 border-gray-600 text-gray-200 shadow-sm'
+                          : 'bg-gray-900/30 border-gray-800 text-gray-600 opacity-60'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${s.bgClass}`} />
+                      {s.label}
+                    </button>
+                  );
+                })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (chartTab === 'rates') {
+                setVisibleRateSeries({
+                  pageview_to_cart_pct: true,
+                  cart_to_lead_pct: true,
+                  lead_to_initiate_pct: true,
+                  initiate_to_purchase_pct: true,
+                  overall_conversion_pct: true,
+                });
+              } else {
+                setVisibleSeries({
+                  PageView: true,
+                  AddToCart: true,
+                  Lead: true,
+                  InitiateCheckout: true,
+                  Purchase: true,
+                });
+              }
+            }}
+            className="text-[11px] text-violet-400 hover:text-violet-300 underline"
+          >
+            Ativar todas as séries
+          </button>
         </div>
 
         {/* SVG Chart */}
@@ -703,61 +894,104 @@ export default function LeadsDashboard() {
                 {/* Horizontal Grid lines */}
                 {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
                   const y = 200 - pct * 180;
-                  const val = Math.round(chartMax * pct);
+                  const maxVal = chartTab === 'rates' ? rateChartMax : chartMax;
+                  const val = Math.round(maxVal * pct);
                   return (
                     <g key={i}>
                       <line x1="45" y1={y} x2="790" y2={y} stroke="#374151" strokeDasharray="3 3" strokeWidth="1" />
                       <text x="40" y={y + 3} fill="#9ca3af" fontSize="10" textAnchor="end">
-                        {val}
+                        {chartTab === 'rates' ? `${val}%` : val}
                       </text>
                     </g>
                   );
                 })}
 
-                {/* Series Lines & Areas */}
-                {seriesMeta.map((s) => {
-                  if (!visibleSeries[s.key]) return null;
-                  const pts = timeSeries.map((item, idx) => {
-                    const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
-                    const val = getSeriesValue(item, s.key);
-                    const y = 200 - (val / chartMax) * 180;
-                    return `${x},${y}`;
-                  });
+                {/* Series Lines & Areas for Rates View */}
+                {chartTab === 'rates' &&
+                  rateSeriesMeta.map((s) => {
+                    if (!visibleRateSeries[s.key]) return null;
+                    const pts = timeSeries.map((item, idx) => {
+                      const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
+                      const val = getRateSeriesValue(item, s.key);
+                      const y = 200 - (val / rateChartMax) * 180;
+                      return `${x},${y}`;
+                    });
 
-                  return (
-                    <g key={s.key}>
-                      <polyline
-                        fill="none"
-                        stroke={s.color}
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        points={pts.join(' ')}
-                      />
-                      {timeSeries.map((item, idx) => {
-                        const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
-                        const val = getSeriesValue(item, s.key);
-                        const y = 200 - (val / chartMax) * 180;
-                        return (
-                          <circle
-                            key={idx}
-                            cx={x}
-                            cy={y}
-                            r="3.5"
-                            fill={s.color}
-                            className="hover:r-5 transition-all cursor-pointer"
-                          >
-                            <title>{`${s.label}: ${val} (${item.label || item.period})`}</title>
-                          </circle>
-                        );
-                      })}
-                    </g>
-                  );
-                })}
+                    return (
+                      <g key={s.key}>
+                        <polyline
+                          fill="none"
+                          stroke={s.color}
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={pts.join(' ')}
+                        />
+                        {timeSeries.map((item, idx) => {
+                          const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
+                          const val = getRateSeriesValue(item, s.key);
+                          const y = 200 - (val / rateChartMax) * 180;
+                          return (
+                            <circle
+                              key={idx}
+                              cx={x}
+                              cy={y}
+                              r="3.5"
+                              fill={s.color}
+                              className="hover:r-5 transition-all cursor-pointer"
+                            >
+                              <title>{`${s.label}: ${val}% (${item.label || item.period})`}</title>
+                            </circle>
+                          );
+                        })}
+                      </g>
+                    );
+                  })}
+
+                {/* Series Lines & Areas for Volumes View */}
+                {chartTab === 'volumes' &&
+                  seriesMeta.map((s) => {
+                    if (!visibleSeries[s.key]) return null;
+                    const pts = timeSeries.map((item, idx) => {
+                      const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
+                      const val = getSeriesValue(item, s.key);
+                      const y = 200 - (val / chartMax) * 180;
+                      return `${x},${y}`;
+                    });
+
+                    return (
+                      <g key={s.key}>
+                        <polyline
+                          fill="none"
+                          stroke={s.color}
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={pts.join(' ')}
+                        />
+                        {timeSeries.map((item, idx) => {
+                          const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
+                          const val = getSeriesValue(item, s.key);
+                          const y = 200 - (val / chartMax) * 180;
+                          return (
+                            <circle
+                              key={idx}
+                              cx={x}
+                              cy={y}
+                              r="3.5"
+                              fill={s.color}
+                              className="hover:r-5 transition-all cursor-pointer"
+                            >
+                              <title>{`${s.label}: ${val} (${item.label || item.period})`}</title>
+                            </circle>
+                          );
+                        })}
+                      </g>
+                    );
+                  })}
 
                 {/* X Axis Labels */}
                 {timeSeries.map((item, idx) => {
-                  // Show roughly 8-12 labels max to avoid overlap
                   const step = Math.max(1, Math.floor(timeSeries.length / 10));
                   if (idx % step !== 0 && idx !== timeSeries.length - 1) return null;
                   const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
