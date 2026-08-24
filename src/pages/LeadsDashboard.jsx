@@ -239,24 +239,6 @@ export default function LeadsDashboard() {
     },
   ];
 
-  // Chart max value calculation
-  const chartMax = useMemo(() => {
-    if (!timeSeries.length) return 100;
-    let max = 0;
-    for (const item of timeSeries) {
-      if (visibleSeries.PageView && item.pageview_count > max) max = item.pageview_count;
-      if (visibleSeries.AddToCart && item.add_to_cart_count > max) max = item.add_to_cart_count;
-      if (visibleSeries.Lead && (item.total_captured_contacts || item.lead_count) > max) {
-        max = item.total_captured_contacts || item.lead_count;
-      }
-      if (visibleSeries.InitiateCheckout && (item.total_initiated_checkout || item.initiate_checkout_count) > max) {
-        max = item.total_initiated_checkout || item.initiate_checkout_count;
-      }
-      if (visibleSeries.Purchase && item.purchase_count > max) max = item.purchase_count;
-    }
-    return max > 0 ? max * 1.15 : 100;
-  }, [timeSeries, visibleSeries]);
-
   const seriesMeta = [
     { key: 'PageView', label: 'PageView', color: '#3b82f6', bgClass: 'bg-blue-500' },
     { key: 'AddToCart', label: 'AddToCart', color: '#a855f7', bgClass: 'bg-purple-500' },
@@ -264,6 +246,33 @@ export default function LeadsDashboard() {
     { key: 'InitiateCheckout', label: 'Checkout', color: '#f59e0b', bgClass: 'bg-amber-500' },
     { key: 'Purchase', label: 'Purchase', color: '#10b981', bgClass: 'bg-emerald-500' },
   ];
+
+  function getSeriesValue(item, key) {
+    if (!item) return 0;
+    if (key === 'PageView') return item.pageview_count || 0;
+    if (key === 'AddToCart') return item.add_to_cart_count || 0;
+    if (key === 'Lead') return item.total_captured_contacts ?? item.lead_count ?? 0;
+    if (key === 'InitiateCheckout') {
+      return item.total_initiated_checkout ?? ((item.initiate_checkout_count || 0) + (item.purchase_count || 0));
+    }
+    if (key === 'Purchase') return item.purchase_count || 0;
+    return 0;
+  }
+
+  // Chart max value calculation
+  const chartMax = useMemo(() => {
+    if (!timeSeries.length) return 100;
+    let max = 0;
+    for (const item of timeSeries) {
+      for (const s of seriesMeta) {
+        if (visibleSeries[s.key]) {
+          const val = getSeriesValue(item, s.key);
+          if (val > max) max = val;
+        }
+      }
+    }
+    return max > 0 ? max * 1.15 : 100;
+  }, [timeSeries, visibleSeries]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -710,16 +719,7 @@ export default function LeadsDashboard() {
                   if (!visibleSeries[s.key]) return null;
                   const pts = timeSeries.map((item, idx) => {
                     const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
-                    const val =
-                      s.key === 'PageView'
-                        ? item.pageview_count
-                        : s.key === 'AddToCart'
-                        ? item.add_to_cart_count
-                        : s.key === 'Lead'
-                        ? item.lead_count
-                        : s.key === 'InitiateCheckout'
-                        ? item.initiate_checkout_count
-                        : item.purchase_count;
+                    const val = getSeriesValue(item, s.key);
                     const y = 200 - (val / chartMax) * 180;
                     return `${x},${y}`;
                   });
@@ -736,23 +736,14 @@ export default function LeadsDashboard() {
                       />
                       {timeSeries.map((item, idx) => {
                         const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
-                        const val =
-                          s.key === 'PageView'
-                            ? item.pageview_count
-                            : s.key === 'AddToCart'
-                            ? item.add_to_cart_count
-                            : s.key === 'Lead'
-                            ? item.total_captured_contacts || item.lead_count
-                            : s.key === 'InitiateCheckout'
-                            ? item.total_initiated_checkout || (item.initiate_checkout_count + item.purchase_count)
-                            : item.purchase_count;
+                        const val = getSeriesValue(item, s.key);
                         const y = 200 - (val / chartMax) * 180;
                         return (
                           <circle
                             key={idx}
                             cx={x}
                             cy={y}
-                            r="3"
+                            r="3.5"
                             fill={s.color}
                             className="hover:r-5 transition-all cursor-pointer"
                           >
