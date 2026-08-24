@@ -201,32 +201,34 @@ export default function LeadsDashboard() {
     },
     {
       id: 'Lead',
-      label: '3. Contato Capturado',
-      sublabel: 'E-mail / WhatsApp',
-      count: funnel.lead_count,
+      label: '3. Contatos Capturados',
+      sublabel: `${formatNumber(funnel.lead_count)} pararam nesta etapa`,
+      count: funnel.total_captured_contacts,
       color: 'from-cyan-500 to-teal-600',
       bgColor: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400',
       icon: Users,
       nextRate: rates.lead_to_initiate_pct,
       nextLabel: 'Taxa checkout',
-      dropOff: funnel.lead_count > 0 ? Math.max(0, 100 - rates.lead_to_initiate_pct) : 0,
+      dropOff: funnel.total_captured_contacts > 0 ? Math.max(0, 100 - rates.lead_to_initiate_pct) : 0,
     },
     {
       id: 'InitiateCheckout',
-      label: '4. Submissão Checkout',
-      sublabel: 'PIX / Cartão gerado',
-      count: funnel.initiate_checkout_count,
+      label: '4. Checkouts Iniciados',
+      sublabel: `${formatNumber(funnel.initiate_checkout_count)} pendentes / abandonados`,
+      count: funnel.total_initiated_checkout ?? (funnel.initiate_checkout_count + funnel.purchase_count),
       color: 'from-amber-500 to-orange-600',
       bgColor: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
       icon: CreditCard,
       nextRate: rates.initiate_to_purchase_pct,
       nextLabel: 'Taxa pagamento',
-      dropOff: funnel.initiate_checkout_count > 0 ? Math.max(0, 100 - rates.initiate_to_purchase_pct) : 0,
+      dropOff: (funnel.total_initiated_checkout || (funnel.initiate_checkout_count + funnel.purchase_count)) > 0
+        ? Math.max(0, 100 - rates.initiate_to_purchase_pct)
+        : 0,
     },
     {
       id: 'Purchase',
-      label: '5. Venda Concluída',
-      sublabel: 'Pagamento aprovado',
+      label: '5. Vendas Aprovadas',
+      sublabel: 'Pagamento concluído',
       count: funnel.purchase_count,
       color: 'from-emerald-500 to-green-600',
       bgColor: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
@@ -244,8 +246,12 @@ export default function LeadsDashboard() {
     for (const item of timeSeries) {
       if (visibleSeries.PageView && item.pageview_count > max) max = item.pageview_count;
       if (visibleSeries.AddToCart && item.add_to_cart_count > max) max = item.add_to_cart_count;
-      if (visibleSeries.Lead && item.lead_count > max) max = item.lead_count;
-      if (visibleSeries.InitiateCheckout && item.initiate_checkout_count > max) max = item.initiate_checkout_count;
+      if (visibleSeries.Lead && (item.total_captured_contacts || item.lead_count) > max) {
+        max = item.total_captured_contacts || item.lead_count;
+      }
+      if (visibleSeries.InitiateCheckout && (item.total_initiated_checkout || item.initiate_checkout_count) > max) {
+        max = item.total_initiated_checkout || item.initiate_checkout_count;
+      }
       if (visibleSeries.Purchase && item.purchase_count > max) max = item.purchase_count;
     }
     return max > 0 ? max * 1.15 : 100;
@@ -254,8 +260,8 @@ export default function LeadsDashboard() {
   const seriesMeta = [
     { key: 'PageView', label: 'PageView', color: '#3b82f6', bgClass: 'bg-blue-500' },
     { key: 'AddToCart', label: 'AddToCart', color: '#a855f7', bgClass: 'bg-purple-500' },
-    { key: 'Lead', label: 'Lead', color: '#06b6d4', bgClass: 'bg-cyan-500' },
-    { key: 'InitiateCheckout', label: 'InitiateCheckout', color: '#f59e0b', bgClass: 'bg-amber-500' },
+    { key: 'Lead', label: 'Lead (Contatos)', color: '#06b6d4', bgClass: 'bg-cyan-500' },
+    { key: 'InitiateCheckout', label: 'Checkout', color: '#f59e0b', bgClass: 'bg-amber-500' },
     { key: 'Purchase', label: 'Purchase', color: '#10b981', bgClass: 'bg-emerald-500' },
   ];
 
@@ -449,25 +455,25 @@ export default function LeadsDashboard() {
           </div>
         </div>
 
-        {/* 3. Lead */}
+        {/* 3. Contatos Capturados (Lead Total) */}
         <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Lead</span>
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Contatos</span>
             <span className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
               <Users className="h-4 w-4" />
             </span>
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-extrabold text-white">
-              {loading ? '—' : formatNumber(funnel.lead_count)}
+              {loading ? '—' : formatNumber(funnel.total_captured_contacts)}
             </div>
             <p className="text-[11px] text-cyan-400 font-medium mt-1">
-              {loading ? '—' : `${rates.cart_to_lead_pct}% de conversão`}
+              {loading ? '—' : `${rates.cart_to_lead_pct}% de AddToCart`}
             </p>
           </div>
         </div>
 
-        {/* 4. InitiateCheckout */}
+        {/* 4. InitiateCheckout (Total Checkouts) */}
         <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Checkout</span>
@@ -477,10 +483,12 @@ export default function LeadsDashboard() {
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-extrabold text-white">
-              {loading ? '—' : formatNumber(funnel.initiate_checkout_count)}
+              {loading
+                ? '—'
+                : formatNumber(funnel.total_initiated_checkout ?? (funnel.initiate_checkout_count + funnel.purchase_count))}
             </div>
             <p className="text-[11px] text-amber-400 font-medium mt-1">
-              {loading ? '—' : `${rates.lead_to_initiate_pct}% de avanço`}
+              {loading ? '—' : `${rates.lead_to_initiate_pct}% dos contatos`}
             </p>
           </div>
         </div>
@@ -498,7 +506,7 @@ export default function LeadsDashboard() {
               {loading ? '—' : formatNumber(funnel.purchase_count)}
             </div>
             <p className="text-[11px] text-emerald-400 font-medium mt-1">
-              {loading ? '—' : `${rates.initiate_to_purchase_pct}% pagamentos`}
+              {loading ? '—' : `${rates.initiate_to_purchase_pct}% pagamentos aprovados`}
             </p>
           </div>
         </div>
@@ -516,7 +524,7 @@ export default function LeadsDashboard() {
               {loading ? '—' : `${rates.overall_conversion_pct}%`}
             </div>
             <p className="text-[11px] text-gray-300 mt-1">
-              {loading ? '—' : `${formatNumber(funnel.total_captured_contacts)} contatos totais`}
+              {loading ? '—' : `${formatNumber(funnel.total_captured_contacts)} contatos no total`}
             </p>
           </div>
         </div>
@@ -734,9 +742,9 @@ export default function LeadsDashboard() {
                             : s.key === 'AddToCart'
                             ? item.add_to_cart_count
                             : s.key === 'Lead'
-                            ? item.lead_count
+                            ? item.total_captured_contacts || item.lead_count
                             : s.key === 'InitiateCheckout'
-                            ? item.initiate_checkout_count
+                            ? item.total_initiated_checkout || (item.initiate_checkout_count + item.purchase_count)
                             : item.purchase_count;
                         const y = 200 - (val / chartMax) * 180;
                         return (
@@ -806,7 +814,7 @@ export default function LeadsDashboard() {
                   <th className="pb-3 pr-4">Loja</th>
                   <th className="pb-3 px-2 text-right">PageView</th>
                   <th className="pb-3 px-2 text-right">AddToCart</th>
-                  <th className="pb-3 px-2 text-right">Lead</th>
+                  <th className="pb-3 px-2 text-right">Contatos</th>
                   <th className="pb-3 px-2 text-right">Checkout</th>
                   <th className="pb-3 px-2 text-right">Vendas</th>
                   <th className="pb-3 pl-4 text-right">Conv. Pgto</th>
@@ -847,10 +855,10 @@ export default function LeadsDashboard() {
                           {formatNumber(st.add_to_cart_count)}
                         </td>
                         <td className="py-3 px-2 text-right text-cyan-300">
-                          {formatNumber(st.lead_count)}
+                          {formatNumber(st.total_captured_contacts ?? (st.lead_count + (st.initiate_checkout_count || 0) + (st.purchase_count || 0)))}
                         </td>
                         <td className="py-3 px-2 text-right text-amber-300">
-                          {formatNumber(st.initiate_checkout_count)}
+                          {formatNumber(st.total_initiated_checkout ?? ((st.initiate_checkout_count || 0) + (st.purchase_count || 0)))}
                         </td>
                         <td className="py-3 px-2 text-right font-bold text-emerald-400">
                           {formatNumber(st.purchase_count)}
