@@ -85,7 +85,11 @@ export default function ErrorLog() {
 
   useEffect(() => {
     api.get('/admin/errors/projects').then(res => {
-      setProjects(res.data?.projects || []);
+      const rawList = res.data?.projects || [];
+      const mainProjects = Array.from(
+        new Set(rawList.map(p => (typeof p === 'string' ? p.split('/')[0].trim() : '')).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b));
+      setProjects(mainProjects);
     }).catch(() => {});
   }, []);
 
@@ -197,7 +201,18 @@ export default function ErrorLog() {
     {
       key: 'project', label: 'Projeto',
       className: 'px-4 py-3 text-gray-400 text-xs whitespace-nowrap',
-      render: r => r.project || '—',
+      render: r => {
+        if (!r.project) return '—';
+        const parts = r.project.split('/');
+        const main = parts[0];
+        const sub = parts.slice(1).join('/');
+        return (
+          <div className="flex flex-col" title={r.project}>
+            <span className="text-gray-200 font-medium">{main}</span>
+            {sub ? <span className="text-gray-500 text-[11px]">{sub}</span> : null}
+          </div>
+        );
+      },
       csvValue: r => r.project ?? '',
     },
     {
