@@ -96,6 +96,20 @@ export default function ErrorLog() {
   function applyFilters(e) { e.preventDefault(); setPage(1); setApplied({ ...filters }); setSelectedIds(new Set()); }
   function clearFilters()  { setFilters(EMPTY_FILTERS); setApplied(EMPTY_FILTERS); setPage(1); setSelectedIds(new Set()); }
 
+  function handleProjectChange(val) {
+    setFilters(f => ({ ...f, project: val }));
+    setApplied(a => ({ ...a, project: val }));
+    setPage(1);
+    setSelectedIds(new Set());
+  }
+
+  function handleStatusChange(val) {
+    setFilters(f => ({ ...f, status: val }));
+    setApplied(a => ({ ...a, status: val }));
+    setPage(1);
+    setSelectedIds(new Set());
+  }
+
   const allSelected = data.items.length > 0 && selectedIds.size === data.items.length;
 
   function handleSelectOne(id) {
@@ -250,7 +264,7 @@ export default function ErrorLog() {
             <label className="text-xs text-gray-500">Projeto</label>
             <select
               value={filters.project}
-              onChange={e => setFilters(f => ({ ...f, project: e.target.value }))}
+              onChange={e => handleProjectChange(e.target.value)}
               className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
             >
               <option value="">Todos os projetos</option>
@@ -281,7 +295,7 @@ export default function ErrorLog() {
             <label className="text-xs text-gray-500">Status</label>
             <select
               value={filters.status}
-              onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
+              onChange={e => handleStatusChange(e.target.value)}
               className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
             >
               <option value="">Todos</option>
