@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   LifeBuoy, Search, X, RefreshCw, Loader2, History, MessageCircle, Mail, AlertTriangle,
-  CheckCircle2, Clock, Undo2, Sparkles,
+  CheckCircle2, Clock, Undo2, Sparkles, UserCog, Bell, BellOff,
 } from 'lucide-react';
 import api from '@/services/api';
 import AdminGrid from '@/components/ui/AdminGrid';
@@ -20,6 +20,9 @@ import Badge from '@/components/ui/Badge';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ComboboxSelect } from '@/components/ui/ComboboxSelect';
 import { formatUtcDateTime } from '@/utils/format';
+import AgentModal from '@/components/whatsapp/AgentModal';
+import HistoryModal from '@/components/whatsapp/HistoryModal';
+import { FALLBACK_AGENTS } from '@/components/whatsapp/sessionHelpers';
 
 const PER_PAGE = 20;
 
@@ -481,6 +484,18 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
   const [ocupado, setOcupado] = useState('');
+  const [agents, setAgents] = useState(FALLBACK_AGENTS);
+  const [verConversa, setVerConversa] = useState(false);
+  const [trocarAgente, setTrocarAgente] = useState(false);
+
+  useEffect(() => {
+    api.get('/admin/wpp/agents')
+      .then((res) => {
+        const opcoes = res.data?.agents || [];
+        if (opcoes.length) setAgents(opcoes);
+      })
+      .catch(() => {});
+  }, []);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -536,8 +551,41 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
     }
   }
 
+  async function alternarNaoTocar() {
+    const proximo = !ticket.nao_tocar;
+    setOcupado('nao_tocar');
+    setAviso('');
+    try {
+      // Mesma rota da tela de sessoes (EARS-16): nenhum caminho de escrita proprio. O
+      // `ticket_id` diz onde auditar -- neste chamado, mesmo fechado (EARS-16a).
+      const res = await api.patch(`/admin/wpp/sessions/${encodeURIComponent(ticket.lid)}/dont-touch`, {
+        active: proximo, ticket_id: ticket.id,
+      });
+      setTicket((t) => ({ ...t, nao_tocar: proximo }));
+      if (res.data && res.data.auditoria === false) {
+        setAviso('A flag mudou, mas o registro nao entrou no historico deste chamado.');
+      } else {
+        await carregarEventos();
+      }
+    } catch {
+      setAviso('Nao foi possivel mudar a flag "nao tocar".');
+    } finally {
+      setOcupado('');
+    }
+  }
+
+  async function carregarEventos() {
+    try {
+      const evs = await api.get(`/admin/wpp/tickets/${ticketId}/events`);
+      setEventos(evs.data?.items || []);
+    } catch {
+      /* o historico continua mostrando o que ja estava */
+    }
+  }
+
   const resumoIndisponivel = ticket ? textoResumo(ticket) : null;
   const motivo = ticket ? textoMotivoReembolso(ticket) : null;
+  const sessao = ticket ? { lid: ticket.lid, current_agent: ticket.agente_atual, whatsapp_phone: ticket.telefone } : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
@@ -668,6 +716,33 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
               {ocupado === 'refresh' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Atualizar dados
             </button>
+            <button
+              type="button"
+              onClick={() => setVerConversa(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs transition-colors"
+            >
+              <History className="h-3.5 w-3.5" /> Ver conversa
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrocarAgente(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs transition-colors"
+            >
+              <UserCog className="h-3.5 w-3.5" /> Trocar agente
+            </button>
+            <button
+              type="button"
+              onClick={alternarNaoTocar}
+              disabled={!!ocupado}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-60 ${
+                ticket.nao_tocar === true ? 'bg-red-600/80 hover:bg-red-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+              }`}
+            >
+              {ocupado === 'nao_tocar'
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : ticket.nao_tocar === true ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+              {ticket.nao_tocar === true ? 'Nao tocar: ligado' : 'Nao tocar'}
+            </button>
             <span className="text-[11px] text-gray-500">
               retrato de {formatUtcDateTime(ticket.enriquecido_em)}
             </span>
@@ -690,6 +765,28 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
           </div>
         )}
       </div>
+
+      {verConversa && sessao && (
+        <HistoryModal
+          session={sessao}
+          agents={agents}
+          anonymizeExport
+          onClose={() => setVerConversa(false)}
+        />
+      )}
+      {trocarAgente && sessao && (
+        <AgentModal
+          session={sessao}
+          agents={agents}
+          ticketId={ticket.id}
+          onClose={() => setTrocarAgente(false)}
+          onSaved={(_lid, agente) => {
+            setTicket((t) => ({ ...t, agente_atual: agente }));
+            carregarEventos();
+            onChanged?.();
+          }}
+        />
+      )}
     </div>
   );
 }

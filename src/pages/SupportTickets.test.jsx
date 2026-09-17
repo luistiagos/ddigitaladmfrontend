@@ -15,7 +15,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
 }));
 
 import api from '@/services/api';
@@ -66,6 +66,7 @@ function montarApi({ items = [chamado()], detalhe = null, eventos = [], config =
     return Promise.resolve({ data: {} });
   });
   api.post.mockResolvedValue({ data: {} });
+  api.patch.mockResolvedValue({ data: { success: true, auditoria: true } });
 }
 
 /** A ULTIMA consulta a fila -- a primeira e a do carregamento inicial, sem filtro. */
@@ -348,5 +349,81 @@ describe('detalhe — status (EARS-14) e atualizar dados', () => {
     render(<SupportTickets />);
     await abrirDetalhe();
     expect(screen.getByText(`retrato de ${formatUtcDateTime('2026-09-17 12:50:00')}`)).toBeInTheDocument();
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// T7 — acoes sobre a sessao a partir do chamado (EARS-15, EARS-16, EARS-16a)
+// ---------------------------------------------------------------------------
+
+describe('acoes de sessao pelo chamado', () => {
+  it('"Ver conversa" abre o historico da MESMA sessao, sem procurar pelo identificador', async () => {
+    montarApi();
+    api.get.mockImplementation((url) => {
+      if (url.startsWith('/admin/items')) return Promise.resolve({ data: { items: [] } });
+      if (url.startsWith('/admin/wpp/tickets/summary-config')) return Promise.resolve({ data: { enabled: false, daily_cap: 25 } });
+      if (url.startsWith('/admin/wpp/agents')) return Promise.resolve({ data: { agents: [] } });
+      if (/\/admin\/wpp\/tickets\/\d+\/events/.test(url)) return Promise.resolve({ data: { items: [] } });
+      if (/\/admin\/wpp\/tickets\/\d+$/.test(url)) return Promise.resolve({ data: chamado() });
+      if (url.startsWith('/admin/wpp/tickets?')) return Promise.resolve({ data: { items: [chamado()], total: 1 } });
+      if (url.includes('/messages')) return Promise.resolve({ data: { items: [], total: 0 } });
+      return Promise.resolve({ data: {} });
+    });
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    await userEvent.click(screen.getByRole('button', { name: /ver conversa/i }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(
+      expect.stringContaining(`/admin/wpp/sessions/${encodeURIComponent('111@lid')}/messages`),
+    ));
+  });
+
+  it('"Trocar agente" usa a rota de sessao e leva o chamado de origem', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    await userEvent.click(screen.getByRole('button', { name: /trocar agente/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /salvar/i }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      `/admin/wpp/sessions/${encodeURIComponent('111@lid')}/agent`,
+      expect.objectContaining({ ticket_id: 7 }),
+    ));
+  });
+
+  it('"Nao tocar" manda lid + ticket_id na mesma rota da tela de sessoes', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    await userEvent.click(screen.getByRole('button', { name: /nao tocar/i }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      `/admin/wpp/sessions/${encodeURIComponent('111@lid')}/dont-touch`,
+      { active: true, ticket_id: 7 },
+    ));
+  });
+
+  it('acao que valeu mas nao foi auditada avisa em vez de calar', async () => {
+    montarApi();
+    api.patch.mockResolvedValue({ data: { success: true, auditoria: false } });
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    await userEvent.click(screen.getByRole('button', { name: /nao tocar/i }));
+    expect(await screen.findByText(/nao entrou no historico deste chamado/i)).toBeInTheDocument();
+  });
+
+  it('o chamado FECHADO continua oferecendo as acoes, e elas auditam nele', async () => {
+    montarApi({ items: [chamado({ status: 'fechado' })] });
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    await userEvent.click(screen.getByRole('button', { name: /nao tocar/i }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      expect.stringContaining('/dont-touch'),
+      { active: true, ticket_id: 7 },
+    ));
   });
 });
