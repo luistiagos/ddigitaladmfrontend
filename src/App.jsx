@@ -18,6 +18,7 @@ import Products from '@/pages/Products';
 import BotConfig from '@/pages/BotConfig';
 import WhatsAppSessions from '@/pages/WhatsAppSessions';
 import WhatsAppConsults from '@/pages/WhatsAppConsults';
+import SupportTickets from '@/pages/SupportTickets';
 import EmailActivity from '@/pages/EmailActivity';
 import EmailQueue from '@/pages/EmailQueue';
 import ErrorLog from '@/pages/ErrorLog';
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="produtos" element={<Products />} />
             <Route path="whatsapp-sessoes" element={<WhatsAppSessions />} />
             <Route path="whatsapp-consultas" element={<WhatsAppConsults />} />
+            <Route path="whatsapp-chamados" element={<SupportTickets />} />
             <Route path="whatsapp-telemetria" element={<WhatsAppTelemetry />} />
 
             <Route path="email-activity" element={<EmailActivity />} />
