@@ -16,10 +16,10 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import AdminGrid from '@/components/ui/AdminGrid';
-import Badge from '@/components/ui/Badge';
+import Badge, { statusVariant } from '@/components/ui/Badge';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ComboboxSelect } from '@/components/ui/ComboboxSelect';
-import { formatUtcDateTime } from '@/utils/format';
+import { formatUtcDateTime, formatPhone } from '@/utils/format';
 import AgentModal from '@/components/whatsapp/AgentModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
 import { FALLBACK_AGENTS } from '@/components/whatsapp/sessionHelpers';
@@ -103,8 +103,24 @@ export function pacotesDoTicket(ticket) {
   }
 }
 
+// Coluna própria de reembolso (EARS-23), substitui o badge único que só distinguia
+// solicitado/nada: agora "feito"/"contestado" (confirmados pelo provedor de pagamento,
+// EARS-22/22a) prevalecem sobre "solicitado" (interceptado na conversa, EARS-7).
+export function estadoReembolso(ticket) {
+  if (ticket?.reembolso_confirmado === 'refunded') {
+    return { texto: 'Reembolso feito', variant: statusVariant('refunded') };
+  }
+  if (ticket?.reembolso_confirmado === 'charged_back') {
+    return { texto: 'Reembolso contestado', variant: statusVariant('charged_back') };
+  }
+  if (ticket?.reembolso) {
+    return { texto: 'Reembolso solicitado', variant: 'yellow' };
+  }
+  return null;
+}
+
 function labelWhatsApp(ticket) {
-  return ticket?.telefone || 'WhatsApp não localizado';
+  return ticket?.telefone ? formatPhone(ticket.telefone) : 'WhatsApp não localizado';
 }
 
 function labelEmail(ticket) {
@@ -288,12 +304,21 @@ export default function SupportTickets() {
       render: (row) => (
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant={STATUS_VARIANT[row.status] || 'gray'}>{STATUS_LABEL[row.status] || row.status}</Badge>
-          {row.reembolso ? <Badge variant="orange">Reembolso</Badge> : null}
           {row.parado ? <Badge variant="red">Parado</Badge> : null}
           {row.cliente_esperando ? <Badge variant="green">Esperando</Badge> : null}
         </div>
       ),
       csvValue: (row) => STATUS_LABEL[row.status] || row.status,
+    },
+    {
+      key: 'reembolso',
+      label: 'Reembolso',
+      className: 'px-4 py-3 whitespace-nowrap',
+      render: (row) => {
+        const estado = estadoReembolso(row);
+        return estado ? <Badge variant={estado.variant}>{estado.texto}</Badge> : null;
+      },
+      csvValue: (row) => estadoReembolso(row)?.texto || '',
     },
     {
       key: 'agente_atual',
@@ -585,6 +610,7 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
 
   const resumoIndisponivel = ticket ? textoResumo(ticket) : null;
   const motivo = ticket ? textoMotivoReembolso(ticket) : null;
+  const reembolsoTicket = ticket ? estadoReembolso(ticket) : null;
   const sessao = ticket ? { lid: ticket.lid, current_agent: ticket.agente_atual, whatsapp_phone: ticket.telefone } : null;
 
   return (
@@ -603,7 +629,7 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
                 </Badge>
                 <span>aberto em {formatUtcDateTime(ticket.aberto_em)}</span>
                 {ticket.parado ? <Badge variant="red">Parado</Badge> : null}
-                {ticket.reembolso ? <Badge variant="orange">Reembolso</Badge> : null}
+                {reembolsoTicket ? <Badge variant={reembolsoTicket.variant}>{reembolsoTicket.texto}</Badge> : null}
               </div>
             )}
           </div>

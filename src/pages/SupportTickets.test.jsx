@@ -41,6 +41,7 @@ function chamado(extra = {}) {
     enriquecido_em: '2026-09-17 12:50:00',
     reembolso: 0,
     reembolso_motivo: null,
+    reembolso_confirmado: null,
     resumo_status: 'pendente',
     resumo_problema: null,
     resumo_onde: null,
@@ -114,12 +115,18 @@ describe('fila', () => {
     })).toBe(formatUtcDateTime('2026-09-17 12:45:00'));
   });
 
-  it('os distintivos de parado, reembolso e esperando saem do campo', async () => {
-    montarApi({ items: [chamado({ parado: true, reembolso: 1, cliente_esperando: false })] });
+  it('os distintivos de parado e esperando saem do campo', async () => {
+    montarApi({ items: [chamado({ parado: true, cliente_esperando: false })] });
     render(<SupportTickets />);
     expect(await screen.findByText('Parado')).toBeInTheDocument();
-    expect(screen.getByText('Reembolso')).toBeInTheDocument();
     expect(screen.queryByText('Esperando')).not.toBeInTheDocument();
+  });
+
+  it('o telefone aparece mascarado na fila', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    expect(await screen.findByText('(11) 98888-7777')).toBeInTheDocument();
+    expect(screen.queryByText('5511988887777')).not.toBeInTheDocument();
   });
 
   it('o filtro de status, período e parados vai inteiro para a API', async () => {
@@ -167,6 +174,48 @@ describe('fila', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Coluna de reembolso (EARS-23) — substitui o badge único; 4 estados, o mais
+// avançado prevalece.
+// ---------------------------------------------------------------------------
+
+describe('coluna de reembolso (EARS-23)', () => {
+  it('vazio quando nao ha reembolso nenhum', async () => {
+    montarApi({ items: [chamado()] });
+    render(<SupportTickets />);
+    await screen.findByText('o jogo nao abre no pc');
+    expect(screen.queryByText('Reembolso solicitado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reembolso feito')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reembolso contestado')).not.toBeInTheDocument();
+  });
+
+  it('"Reembolso solicitado" quando so a interceptacao na conversa ligou', async () => {
+    montarApi({ items: [chamado({ reembolso: 1 })] });
+    render(<SupportTickets />);
+    expect(await screen.findByText('Reembolso solicitado')).toBeInTheDocument();
+  });
+
+  it('"Reembolso feito" prevalece sobre "solicitado" quando os dois sao verdade', async () => {
+    montarApi({ items: [chamado({ reembolso: 1, reembolso_confirmado: 'refunded' })] });
+    render(<SupportTickets />);
+    expect(await screen.findByText('Reembolso feito')).toBeInTheDocument();
+    expect(screen.queryByText('Reembolso solicitado')).not.toBeInTheDocument();
+  });
+
+  it('"Reembolso contestado" para chargeback confirmado', async () => {
+    montarApi({ items: [chamado({ reembolso: 1, reembolso_confirmado: 'charged_back' })] });
+    render(<SupportTickets />);
+    expect(await screen.findByText('Reembolso contestado')).toBeInTheDocument();
+  });
+
+  it('o detalhe mostra o mesmo estado que a fila', async () => {
+    montarApi({ items: [chamado({ reembolso_confirmado: 'refunded' })] });
+    render(<SupportTickets />);
+    await abrirDetalhe();
+    expect(screen.getAllByText('Reembolso feito').length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Detalhe: cada texto do design §2.6 a partir do campo
 // ---------------------------------------------------------------------------
 
@@ -209,6 +258,20 @@ describe('detalhe — compras (EARS-4)', () => {
 });
 
 describe('detalhe — identificação (EARS-13) e não tocar', () => {
+  it('o telefone aparece mascarado no detalhe, sem mudar o link do wa.me', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await abrirDetalhe();
+    // A fila (atrás do modal) e o detalhe mostram o MESMO telefone mascarado — os dois
+    // links devem existir e nenhum perdeu o href do wa.me por causa da máscara.
+    const links = screen.getAllByRole('link', { name: /98888-7777/i });
+    expect(links.length).toBeGreaterThanOrEqual(1);
+    links.forEach((link) => {
+      expect(link).toHaveTextContent('(11) 98888-7777');
+      expect(link).toHaveAttribute('href', 'https://wa.me/5511988887777');
+    });
+  });
+
   it('sem telefone e sem e-mail, diz que não localizou — nunca campo em branco', async () => {
     montarApi({ items: [chamado({ telefone: null, email: null, wa_link: null })] });
     render(<SupportTickets />);

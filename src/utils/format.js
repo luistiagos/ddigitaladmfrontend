@@ -52,6 +52,29 @@ export function formatUtcDateTime(value) {
   }
 }
 
+/**
+ * Mascara de telefone BR: (DD) 9XXXX-XXXX (celular) ou (DD) XXXX-XXXX (fixo).
+ *
+ * Padrao NOVO -- 18/09, tela de Chamados de suporte. Nenhuma outra tela do painel mascara
+ * telefone hoje (Transactions.jsx mostra o numero cru via PhoneCell); fica restrito aqui
+ * por decisao do dono (design §12).
+ *
+ * Numero que nao se encaixa (poucos digitos, formato internacional, identificador que nao
+ * e telefone) devolve o valor ORIGINAL sem quebrar a tela nem inventar digito.
+ */
+export function formatPhone(value) {
+  if (!value) return '—';
+  const digits = String(value).replace(/\D/g, '');
+  const nacional = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+  if (nacional.length === 11) {
+    return `(${nacional.slice(0, 2)}) ${nacional.slice(2, 7)}-${nacional.slice(7)}`;
+  }
+  if (nacional.length === 10) {
+    return `(${nacional.slice(0, 2)}) ${nacional.slice(2, 6)}-${nacional.slice(6)}`;
+  }
+  return value;
+}
+
 export function formatCurrency(value) {
   if (value == null || value === '') return '—';
   return Number(value).toLocaleString('pt-BR', {
