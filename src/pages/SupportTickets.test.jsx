@@ -171,6 +171,24 @@ describe('fila', () => {
       '/admin/wpp/tickets/summary-config', { enabled: true, daily_cap: 25 },
     ));
   });
+
+  // Bug 2026-09-22: com 9 colunas a tabela estoura o container abaixo de ~1775px de
+  // viewport, e a coluna de acao -- a ULTIMA -- saia inteira da tela, com a barra de
+  // rolagem horizontal 1300px abaixo da dobra. O dono leu isso como "tiraram o botao".
+  // jsdom nao faz layout: o que este teste segura e o MECANISMO (a celula presa na borda
+  // direita). A medicao de pixels esta no doc do bug, feita com Playwright.
+  it('a celula do botao de abrir fica presa na borda direita da tabela', async () => {
+    montarApi();
+    render(<SupportTickets />);
+
+    const celula = (await screen.findByRole('button', { name: /abrir/i })).closest('td');
+    expect(celula.className).toMatch(/\bsticky\b/);
+    expect(celula.className).toMatch(/\bright-0\b/);
+
+    const cabecalho = screen.getByRole('columnheader', { name: /chamado/i });
+    expect(cabecalho.className).toMatch(/\bsticky\b/);
+    expect(cabecalho.className).toMatch(/\bright-0\b/);
+  });
 });
 
 // ---------------------------------------------------------------------------

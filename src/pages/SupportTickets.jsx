@@ -331,6 +331,10 @@ export default function SupportTickets() {
       key: 'acoes',
       label: 'Chamado',
       className: 'px-4 py-3 whitespace-nowrap',
+      // Presa na borda direita: com 9 colunas a tabela estoura o container abaixo de
+      // ~1775px de viewport, e esta — a unica interativa da linha — era a primeira a sair
+      // da tela. O dono leu isso como "tiraram o botao".
+      stickyRight: true,
       render: (row) => (
         <button
           type="button"

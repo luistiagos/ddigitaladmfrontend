@@ -16,6 +16,13 @@
  *                               (used with EmailCell / PhoneCell which own their <td>)
  *   csvValue?     (row) => string      text for CSV/PDF export; falls back to row[key]
  *   className?    string        <td> className override
+ *   stickyRight?  boolean       pins the column to the right edge while the table scrolls
+ *                               sideways. Use it on the column that carries the row's
+ *                               action button: a table with many columns overflows the
+ *                               container, and the LAST column is the first to leave the
+ *                               screen — the action then looks like it was removed, with
+ *                               the horizontal scrollbar sitting below 20 rows, off-screen.
+ *                               Ignored for fullCell columns, which own their own <td>.
  */
 
 import { cloneElement } from 'react';
@@ -28,12 +35,17 @@ import { formatCurrency } from '@/utils/format';
 // Exported header-cell helpers (usable standalone if needed)
 // ---------------------------------------------------------------------------
 
-export function SortableTh({ children, column, sortColumn, sortDirection, onSort }) {
+// Classes que prendem a celula na borda direita enquanto a tabela rola de lado.
+// O fundo precisa ser OPACO: o conteudo das outras colunas passa por baixo.
+const STICKY_TH = 'sticky right-0 z-20 bg-gray-800 border-l border-gray-700';
+const STICKY_TD = 'sticky right-0 z-10 bg-gray-800 border-l border-gray-700';
+
+export function SortableTh({ children, column, sortColumn, sortDirection, onSort, className = '' }) {
   const active = sortColumn === column;
   return (
     <th
       onClick={() => onSort(column)}
-      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none"
+      className={`px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-300 select-none ${className}`}
     >
       <span className="inline-flex items-center gap-1">
         {children}
@@ -45,9 +57,9 @@ export function SortableTh({ children, column, sortColumn, sortDirection, onSort
   );
 }
 
-export function Th({ children }) {
+export function Th({ children, className = '' }) {
   return (
-    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+    <th className={`px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider ${className}`}>
       {children}
     </th>
   );
@@ -153,11 +165,12 @@ export default function AdminGrid({
                     sortColumn={sortColumn}
                     sortDirection={sortDirection}
                     onSort={onSort}
+                    className={col.stickyRight ? STICKY_TH : ''}
                   >
                     {headerContent}
                   </SortableTh>
                 ) : (
-                  <Th key={col.key}>{headerContent}</Th>
+                  <Th key={col.key} className={col.stickyRight ? STICKY_TH : ''}>{headerContent}</Th>
                 );
               })}
             </tr>
@@ -180,8 +193,9 @@ export default function AdminGrid({
                   if (col.fullCell) {
                     return cloneElement(col.render(row), { key: col.key });
                   }
+                  const tdCls = col.className ?? 'px-4 py-3 text-gray-300';
                   return (
-                    <td key={col.key} className={col.className ?? 'px-4 py-3 text-gray-300'}>
+                    <td key={col.key} className={col.stickyRight ? `${tdCls} ${STICKY_TD}` : tdCls}>
                       {col.render ? col.render(row) : (row[col.key] ?? '—')}
                     </td>
                   );
