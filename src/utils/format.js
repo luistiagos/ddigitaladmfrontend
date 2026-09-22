@@ -38,10 +38,19 @@ export function formatDateTime(value) {
 export function formatUtcDateTime(value) {
   if (!value) return '—';
   try {
-    const texto = String(value);
-    const temFuso = /(Z|[+-]\d{2}:?\d{2})$/.test(texto);
-    const iso = texto.includes('T') ? texto : texto.replace(' ', 'T');
-    const d = new Date(temFuso ? iso : `${iso}Z`);
+    const texto = String(value).trim();
+    // Duas familias de entrada chegam aqui, e so a PRIMEIRA precisa de conserto:
+    //
+    // 1. sem fuso -- "2026-09-17 12:45:00" / "2026-09-17T12:45". O banco grava em UTC,
+    //    entao o `Z` e obrigatorio: sem ele o navegador leria como hora LOCAL e a coluna
+    //    atrasaria 3h.
+    // 2. com fuso -- ISO com offset e, sobretudo, o RFC 1123 que o `jsonify` do Flask usa
+    //    para serializar `datetime` ("Mon, 14 Sep 2026 14:01:21 GMT"), que e o que a API
+    //    manda em `aberto_em`. Esse formato o `new Date` ja entende inteiro; mexer nele
+    //    e que o quebrava (o `replace(' ', 'T')` produzia "Mon,T14 Sep ...", data
+    //    invalida, e a tela mostrava a string crua em ingles no lugar de dd/mm/aaaa).
+    const semFuso = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(texto);
+    const d = new Date(semFuso ? `${texto.replace(' ', 'T')}Z` : texto);
     if (Number.isNaN(d.getTime())) return value;
     return d.toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
