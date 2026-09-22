@@ -11,11 +11,19 @@
  *   sortable?     boolean       renders a clickable sort header
  *   headerRender? () => ReactNode  custom header cell content (replaces label)
  *   isValueColumn? boolean      marks this column for the monetary sum in the footer
- *   render?       (row) => ReactNode   cell content — AdminGrid wraps it in <td>
+ *   render?       (row, ctx) => ReactNode   cell content — AdminGrid wraps it in <td>.
+ *                               ctx.card is true when rendering inside a mobile card
+ *                               (see mobileCards): the page can then let long text wrap
+ *                               instead of truncating it to keep a table row short.
  *   fullCell?     boolean       when true, render() must return the full <td> element
  *                               (used with EmailCell / PhoneCell which own their <td>)
  *   csvValue?     (row) => string      text for CSV/PDF export; falls back to row[key]
  *   className?    string        <td> className override
+ *   cardBlock?    boolean       in a mobile card (see mobileCards), this field takes the
+ *                               full width with its label above, instead of sharing the
+ *                               line with the label. For the long free text of the row —
+ *                               squeezed into the half-line left over by the label, it
+ *                               wraps into a narrow ribbon.
  *   stickyRight?  boolean       pins the column to the right edge while the table scrolls
  *                               sideways. Use it on the column that carries the row's
  *                               action button: a table with many columns overflows the
@@ -25,11 +33,39 @@
  *                               Ignored for fullCell columns, which own their own <td>.
  */
 
-import { cloneElement } from 'react';
+import { cloneElement, useEffect, useState } from 'react';
 import { Download, FileText } from 'lucide-react';
 import Pagination from './Pagination';
 import { LoadingRows, EmptyRow, ErrorRow } from './TableStates';
 import { formatCurrency } from '@/utils/format';
+
+// ---------------------------------------------------------------------------
+// Largura da tela, decidida em JS e nao por classe de CSS.
+//
+// Por que nao `lg:hidden` + `hidden lg:block`: isso deixa as DUAS superficies no DOM e so
+// esconde uma. O navegador aguenta, mas cada registro passa a existir em dobro -- e em
+// jsdom, que nao aplica media query, TUDO fica visivel e qualquer `getByText` encontra
+// dois elementos (foi o que quebrou 51 testes desta suite de uma vez).
+//
+// Sem `matchMedia` (jsdom), a resposta e "nao e estreita": o teste ve a tabela, que e a
+// superficie que ele sempre viu. Quem for testar o cartao dubla `window.matchMedia`.
+const CONSULTA_ESTREITA = '(max-width: 1023.98px)';   // abaixo do `lg` do Tailwind
+
+function useTelaEstreita(ativo) {
+  const [estreita, setEstreita] = useState(false);
+  useEffect(() => {
+    if (!ativo || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      setEstreita(false);
+      return undefined;
+    }
+    const mq = window.matchMedia(CONSULTA_ESTREITA);
+    const aoMudar = (e) => setEstreita(e.matches);
+    setEstreita(mq.matches);
+    mq.addEventListener('change', aoMudar);
+    return () => mq.removeEventListener('change', aoMudar);
+  }, [ativo]);
+  return estreita;
+}
 
 // ---------------------------------------------------------------------------
 // Exported header-cell helpers (usable standalone if needed)
@@ -85,7 +121,16 @@ export default function AdminGrid({
   totalLabel = 'registro',
   /** used in PDF title and CSV filename */
   title = '',
+  /**
+   * Abaixo de `lg` (1024px), troca a tabela por um cartao por registro. Opt-in porque o
+   * ganho depende do numero de colunas: uma tabela de 4 colunas cabe no celular, uma de 9
+   * vira 1100px de rolagem lateral para ler UMA linha. Os cartoes saem das MESMAS
+   * `columns` -- rotulo + valor renderizado --, entao nao existe segunda definicao de tela
+   * para divergir da primeira.
+   */
+  mobileCards = false,
 }) {
+  const emCartoes = useTelaEstreita(mobileCards);
   const items = data.items || [];
   const total = data.total ?? 0;
   const totalValue = data.total_value ?? null;
@@ -148,8 +193,84 @@ export default function AdminGrid({
   const footerBefore = hasValueSummary ? (valueColIdx > 0 ? valueColIdx : 1) : colCount;
   const footerAfter  = hasValueSummary ? colCount - footerBefore - 1 : 0;
 
+  // ---- Cartoes (telas estreitas) --------------------------------------------
+  // Colunas sem rotulo (o seletor) e a coluna presa na borda direita (a acao da linha)
+  // vao para a faixa de cima do cartao; o resto vira rotulo + valor.
+  const colTopo = columns.filter((c) => !c.label || c.stickyRight);
+  const colCorpo = columns.filter((c) => c.label && !c.stickyRight);
+  const colAcao = columns.find((c) => c.stickyRight);
+
+  // `fullCell` devolve o <td> inteiro, que nao existe fora da tabela: no cartao cai no
+  // texto do CSV, que e exatamente "o valor desta celula em texto".
+  //
+  // O segundo argumento do `render` diz em QUE superficie a celula esta. Existe porque
+  // largura de cartao nao e largura de coluna: o que na tabela se corta com `truncate`
+  // (para a linha nao crescer) no cartao precisa quebrar em varias linhas -- e quem sabe
+  // disso e a pagina, que escreveu o `render`. Quem ignora o argumento nao muda de
+  // comportamento.
+  const valorNoCartao = (col, row) => (
+    col.fullCell
+      ? (col.csvValue ? col.csvValue(row) : (row[col.key] ?? '—'))
+      : (col.render ? col.render(row, { card: true }) : (row[col.key] ?? '—'))
+  );
+
   return (
     <div className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
+      {emCartoes && (
+        <div className="divide-y divide-gray-800">
+          {loading && <div className="px-4 py-6 text-sm text-gray-400">Carregando…</div>}
+          {!loading && error && <div className="px-4 py-6 text-sm text-red-400">{error}</div>}
+          {!loading && !error && items.length === 0 && (
+            <div className="px-4 py-6 text-sm text-gray-400">{emptyMessage}</div>
+          )}
+          {!loading && !error && items.map((row, idx) => (
+            <div key={row.id ?? idx} className="px-4 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {colTopo.filter((c) => c !== colAcao).map((col) => (
+                    <div key={col.key} className="shrink-0">{valorNoCartao(col, row)}</div>
+                  ))}
+                </div>
+                {colAcao && <div className="shrink-0">{valorNoCartao(colAcao, row)}</div>}
+              </div>
+              <dl className="mt-3 space-y-2">
+                {colCorpo.map((col) => {
+                  const valor = valorNoCartao(col, row);
+                  if (valor == null || valor === '') return null;
+                  if (col.cardBlock) {
+                    return (
+                      <div key={col.key}>
+                        <dt className="text-[11px] uppercase tracking-wider text-gray-500">
+                          {col.label}
+                        </dt>
+                        <dd className="text-sm text-gray-300 mt-0.5">{valor}</dd>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={col.key} className="flex items-start justify-between gap-3">
+                      <dt className="text-[11px] uppercase tracking-wider text-gray-500 shrink-0 pt-0.5">
+                        {col.label}
+                      </dt>
+                      <dd className="text-sm text-gray-300 text-right min-w-0">
+                        {valor}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </div>
+          ))}
+          <div className="px-4 py-3 text-sm text-gray-300">
+            {countText}
+            {hasValueSummary && (
+              <span className="text-emerald-400 font-semibold"> · {formatCurrency(totalValue)}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!emCartoes && (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
 
@@ -221,6 +342,7 @@ export default function AdminGrid({
 
         </table>
       </div>
+      )}
 
       {/* ---- TOOLBAR: export + pagination (always visible) ---- */}
       <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between gap-4 flex-wrap">

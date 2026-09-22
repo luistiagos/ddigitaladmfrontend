@@ -261,17 +261,17 @@ export default function SupportTickets() {
       key: 'cliente',
       label: 'Cliente',
       className: 'px-4 py-3 text-gray-300',
-      render: (row) => (
+      render: (row, ctx) => (
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-sm">
+          <div className={`flex items-center gap-1.5 text-sm${ctx?.card ? ' justify-end' : ''}`}>
             <MessageCircle className="h-3.5 w-3.5 text-green-400 shrink-0" />
             {row.wa_link
-              ? <a href={row.wa_link} target="_blank" rel="noreferrer" className="text-green-400 hover:underline truncate">{labelWhatsApp(row)}</a>
+              ? <a href={row.wa_link} target="_blank" rel="noreferrer" className={`text-green-400 hover:underline${ctx?.card ? '' : ' truncate'}`}>{labelWhatsApp(row)}</a>
               : <span className={row.telefone ? '' : 'text-gray-500 italic'}>{labelWhatsApp(row)}</span>}
           </div>
-          <div className="flex items-center gap-1.5 text-xs mt-0.5">
+          <div className={`flex items-center gap-1.5 text-xs mt-0.5${ctx?.card ? ' justify-end' : ''}`}>
             <Mail className="h-3 w-3 text-gray-500 shrink-0" />
-            <span className={row.email ? 'text-gray-400 truncate' : 'text-gray-500 italic'}>{labelEmail(row)}</span>
+            <span className={row.email ? `text-gray-400${ctx?.card ? ' break-all' : ' truncate'}` : 'text-gray-500 italic'}>{labelEmail(row)}</span>
           </div>
         </div>
       ),
@@ -281,8 +281,14 @@ export default function SupportTickets() {
       key: 'msg_abertura',
       label: 'O que o cliente disse',
       className: 'px-4 py-3 text-gray-300',
-      render: (row) => (
-        <span className="block max-w-[320px] truncate" title={row.msg_abertura || ''}>
+      // E o texto do cliente: no cartao ele ganha a linha inteira, nao a metade que sobra
+      // do rotulo.
+      cardBlock: true,
+      render: (row, ctx) => (
+        <span
+          className={ctx?.card ? 'block' : 'block max-w-[320px] truncate'}
+          title={row.msg_abertura || ''}
+        >
           {row.msg_abertura || <span className="text-gray-500 italic">—</span>}
         </span>
       ),
@@ -477,6 +483,7 @@ export default function SupportTickets() {
         onSort={() => {}}
         totalLabel="chamado"
         title="Chamados de suporte"
+        mobileCards
       />
 
       {confirmarLote && (

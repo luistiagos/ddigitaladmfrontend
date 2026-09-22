@@ -10,7 +10,7 @@
  *
  * Rodar:  npx vitest run src/pages/SupportTickets.test.jsx
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -188,6 +188,59 @@ describe('fila', () => {
     const cabecalho = screen.getByRole('columnheader', { name: /chamado/i });
     expect(cabecalho.className).toMatch(/\bsticky\b/);
     expect(cabecalho.className).toMatch(/\bright-0\b/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tela estreita (celular) — bug 2026-09-22. A tabela de 9 colunas tem 1100px de rolagem
+// lateral num aparelho de 390px: para ler UMA linha o dono arrastaria a tela inteira.
+// Abaixo de 1024px a fila vira um cartao por chamado, tirado das MESMAS colunas.
+// ---------------------------------------------------------------------------
+
+describe('tela estreita (celular)', () => {
+  beforeEach(() => {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches: true, media: query, onchange: null,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    }));
+  });
+
+  afterEach(() => {
+    delete window.matchMedia;
+  });
+
+  it('a fila vira cartao: sem tabela, e o rotulo da coluna vira titulo do campo', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await screen.findByText('o jogo nao abre no pc');
+
+    // uma superficie so: a tabela nao fica escondida no DOM, ela nao existe
+    expect(document.querySelector('table')).toBeNull();
+    expect(screen.getByText('Aberto em')).toBeInTheDocument();
+    expect(screen.getByText('O que o cliente disse')).toBeInTheDocument();
+  });
+
+  it('o botao de abrir o chamado continua no cartao, e abre o detalhe', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await screen.findByText('o jogo nao abre no pc');
+
+    await userEvent.click(screen.getByRole('button', { name: /abrir/i }));
+    expect(await screen.findByText(/Chamado #7/)).toBeInTheDocument();
+  });
+
+  it('o seletor de cada chamado sobrevive, entao o fechamento em lote funciona no celular', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await screen.findByText('o jogo nao abre no pc');
+
+    await userEvent.click(screen.getByLabelText('Selecionar chamado 7'));
+    await userEvent.click(screen.getByRole('button', { name: /fechar selecionados/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /^fechar$/i }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+      '/admin/wpp/tickets/close-batch', { ids: [7] },
+    ));
   });
 });
 
