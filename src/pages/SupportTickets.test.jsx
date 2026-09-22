@@ -98,6 +98,53 @@ describe('fila', () => {
     expect(urlDaFila().get('parados')).toBeNull();
   });
 
+  it('ordena do mais recente ao mais antigo por padrão', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await screen.findByText('o jogo nao abre no pc');
+    const p = urlDaFila();
+    expect(p.get('sort_column')).toBe('aberto_em');
+    expect(p.get('sort_direction')).toBe('desc');
+  });
+
+  it('clicar no cabeçalho de coluna altera a ordenação e envia para a API', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await screen.findByText('o jogo nao abre no pc');
+
+    const thChamado = screen.getByRole('columnheader', { name: /chamado/i });
+    await userEvent.click(thChamado);
+
+    await waitFor(() => {
+      const p = urlDaFila();
+      expect(p.get('sort_column')).toBe('id');
+      expect(p.get('sort_direction')).toBe('asc');
+    });
+
+    await userEvent.click(thChamado);
+    await waitFor(() => {
+      const p = urlDaFila();
+      expect(p.get('sort_column')).toBe('id');
+      expect(p.get('sort_direction')).toBe('desc');
+    });
+  });
+
+  it('o filtro por telefone e email é enviado para a API', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await screen.findByText('o jogo nao abre no pc');
+
+    await userEvent.type(screen.getByLabelText('Telefone'), '11988887777');
+    await userEvent.type(screen.getByLabelText('E-mail'), 'cliente@x.com');
+    await userEvent.click(screen.getByRole('button', { name: /buscar/i }));
+
+    await waitFor(() => {
+      const p = urlDaFila();
+      expect(p.get('telefone')).toBe('11988887777');
+      expect(p.get('email')).toBe('cliente@x.com');
+    });
+  });
+
   it('mostra com quem a conversa está agora', async () => {
     montarApi({ items: [chamado(), chamado({ id: 8, lid: 'b@lid', msg_abertura: 'outra coisa', agente_atual: null })] });
     render(<SupportTickets />);

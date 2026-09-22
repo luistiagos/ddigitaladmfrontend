@@ -20,13 +20,22 @@ import Badge, { statusVariant } from '@/components/ui/Badge';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ComboboxSelect } from '@/components/ui/ComboboxSelect';
 import { formatUtcDateTime, formatPhone } from '@/utils/format';
+import useAdminGrid from '@/utils/useAdminGrid';
 import AgentModal from '@/components/whatsapp/AgentModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
 import { FALLBACK_AGENTS } from '@/components/whatsapp/sessionHelpers';
 
 const PER_PAGE = 20;
 
-const EMPTY_FILTERS = { status: 'abertos', de: '', ate: '', pacote: '', parados: false };
+const EMPTY_FILTERS = {
+  status: 'abertos',
+  de: '',
+  ate: '',
+  pacote: '',
+  telefone: '',
+  email: '',
+  parados: false,
+};
 
 const STATUS_OPTS = [
   { value: 'abertos', label: 'Em aberto (padrão)' },
@@ -132,7 +141,8 @@ function labelEmail(ticket) {
 export default function SupportTickets() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
-  const [page, setPage] = useState(1);
+  const { page, setPage, sortColumn, sortDirection, handleSort } =
+    useAdminGrid({ defaultSort: 'aberto_em', defaultDir: 'desc' });
   const [data, setData] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -158,11 +168,18 @@ export default function SupportTickets() {
     setLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams({ page: String(page), per_page: String(PER_PAGE) });
+      const params = new URLSearchParams({
+        page: String(page),
+        per_page: String(PER_PAGE),
+        sort_column: sortColumn,
+        sort_direction: sortDirection,
+      });
       if (applied.status) params.set('status', applied.status);
       if (applied.de) params.set('de', applied.de);
       if (applied.ate) params.set('ate', applied.ate);
       if (applied.pacote) params.set('pacote', applied.pacote);
+      if (applied.telefone) params.set('telefone', applied.telefone);
+      if (applied.email) params.set('email', applied.email);
       if (applied.parados) params.set('parados', '1');
       const res = await api.get(`/admin/wpp/tickets?${params}`);
       setData({ items: res.data?.items || [], total: res.data?.total || 0 });
@@ -171,7 +188,7 @@ export default function SupportTickets() {
     } finally {
       setLoading(false);
     }
-  }, [page, applied]);
+  }, [page, applied, sortColumn, sortDirection]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -256,6 +273,7 @@ export default function SupportTickets() {
       // (foi assim que o botao no fim da tabela sumiu, em 22/09).
       key: 'id',
       label: 'Chamado',
+      sortable: true,
       className: 'px-4 py-3 whitespace-nowrap',
       cardHeader: true,
       render: (row) => (
@@ -273,6 +291,7 @@ export default function SupportTickets() {
     {
       key: 'aberto_em',
       label: 'Aberto em',
+      sortable: true,
       className: 'px-4 py-3 text-gray-400 whitespace-nowrap',
       render: (row) => formatUtcDateTime(row.aberto_em),
       csvValue: (row) => row.aberto_em ?? '',
@@ -280,6 +299,7 @@ export default function SupportTickets() {
     {
       key: 'cliente',
       label: 'Cliente',
+      sortable: true,
       className: 'px-4 py-3 text-gray-300',
       render: (row, ctx) => (
         <div className="min-w-0">
@@ -300,6 +320,7 @@ export default function SupportTickets() {
     {
       key: 'msg_abertura',
       label: 'O que o cliente disse',
+      sortable: true,
       className: 'px-4 py-3 text-gray-300',
       // E o texto do cliente: no cartao ele ganha a linha inteira, nao a metade que sobra
       // do rotulo.
@@ -317,6 +338,7 @@ export default function SupportTickets() {
     {
       key: 'compras_status',
       label: 'Compras',
+      sortable: true,
       className: 'px-4 py-3 text-gray-300 text-xs',
       render: (row) => (
         <span className={row.compras_status === 'ok' ? '' : 'text-gray-400'}>{textoCompras(row)}</span>
@@ -326,6 +348,7 @@ export default function SupportTickets() {
     {
       key: 'status',
       label: 'Status',
+      sortable: true,
       className: 'px-4 py-3 whitespace-nowrap',
       render: (row) => (
         <div className="flex flex-wrap items-center gap-1.5">
@@ -339,6 +362,7 @@ export default function SupportTickets() {
     {
       key: 'reembolso',
       label: 'Reembolso',
+      sortable: true,
       className: 'px-4 py-3 whitespace-nowrap',
       render: (row) => {
         const estado = estadoReembolso(row);
@@ -349,6 +373,7 @@ export default function SupportTickets() {
     {
       key: 'agente_atual',
       label: 'Agora com',
+      sortable: true,
       className: 'px-4 py-3 text-gray-400 text-xs whitespace-nowrap',
       render: (row) => row.agente_atual || 'Roteamento automático',
       csvValue: (row) => row.agente_atual || 'Roteamento automático',
@@ -398,7 +423,7 @@ export default function SupportTickets() {
       </div>
 
       <form onSubmit={aplicar} className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-500">Status</span>
             <select
@@ -409,6 +434,38 @@ export default function SupportTickets() {
             >
               {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">Telefone</span>
+            <input
+              type="text"
+              aria-label="Telefone"
+              placeholder="5511999999999 ou número"
+              value={filters.telefone}
+              onChange={(e) => setFilters((f) => ({ ...f, telefone: e.target.value }))}
+              className={INP_CLS}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">E-mail</span>
+            <input
+              type="text"
+              aria-label="E-mail"
+              placeholder="cliente@email.com"
+              value={filters.email}
+              onChange={(e) => setFilters((f) => ({ ...f, email: e.target.value }))}
+              className={INP_CLS}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">Pacote comprado</span>
+            <ComboboxSelect
+              options={pacotes}
+              value={filters.pacote}
+              onChange={(v) => setFilters((f) => ({ ...f, pacote: v ? String(v) : '' }))}
+              placeholder="Todos os pacotes"
+              inputClassName={INP_CLS}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-500">De</span>
@@ -428,16 +485,6 @@ export default function SupportTickets() {
               value={filters.ate}
               onChange={(e) => setFilters((f) => ({ ...f, ate: e.target.value }))}
               className={INP_CLS}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-gray-500">Pacote comprado</span>
-            <ComboboxSelect
-              options={pacotes}
-              value={filters.pacote}
-              onChange={(v) => setFilters((f) => ({ ...f, pacote: v ? String(v) : '' }))}
-              placeholder="Todos os pacotes"
-              inputClassName={INP_CLS}
             />
           </label>
         </div>
@@ -479,9 +526,9 @@ export default function SupportTickets() {
         page={page}
         perPage={PER_PAGE}
         onPageChange={setPage}
-        sortColumn=""
-        sortDirection="asc"
-        onSort={() => {}}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
         totalLabel="chamado"
         title="Chamados de suporte"
         mobileCards
