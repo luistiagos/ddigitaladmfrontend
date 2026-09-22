@@ -251,6 +251,26 @@ export default function SupportTickets() {
       csvValue: () => '',
     },
     {
+      // O numero do chamado E o portao do detalhe: um alvo que existe em toda linha, na
+      // PRIMEIRA coluna -- onde a rolagem lateral comeca, entao nunca fica fora da tela
+      // (foi assim que o botao no fim da tabela sumiu, em 22/09).
+      key: 'id',
+      label: 'Chamado',
+      className: 'px-4 py-3 whitespace-nowrap',
+      cardHeader: true,
+      render: (row) => (
+        <button
+          type="button"
+          onClick={() => setDetalheId(row.id)}
+          className="font-medium text-violet-400 hover:text-violet-300 hover:underline"
+          title="Abrir o chamado"
+        >
+          #{row.id}
+        </button>
+      ),
+      csvValue: (row) => String(row.id ?? ''),
+    },
+    {
       key: 'aberto_em',
       label: 'Aberto em',
       className: 'px-4 py-3 text-gray-400 whitespace-nowrap',
@@ -332,25 +352,6 @@ export default function SupportTickets() {
       className: 'px-4 py-3 text-gray-400 text-xs whitespace-nowrap',
       render: (row) => row.agente_atual || 'Roteamento automático',
       csvValue: (row) => row.agente_atual || 'Roteamento automático',
-    },
-    {
-      key: 'acoes',
-      label: 'Chamado',
-      className: 'px-4 py-3 whitespace-nowrap',
-      // Presa na borda direita: com 9 colunas a tabela estoura o container abaixo de
-      // ~1775px de viewport, e esta — a unica interativa da linha — era a primeira a sair
-      // da tela. O dono leu isso como "tiraram o botao".
-      stickyRight: true,
-      render: (row) => (
-        <button
-          type="button"
-          onClick={() => setDetalheId(row.id)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-violet-600 text-gray-200 text-xs transition-colors"
-        >
-          <History className="h-3.5 w-3.5" /> Abrir
-        </button>
-      ),
-      csvValue: () => '',
     },
   ];
 

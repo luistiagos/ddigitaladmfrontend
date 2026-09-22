@@ -77,7 +77,7 @@ function urlDaFila() {
 }
 
 async function abrirDetalhe() {
-  await userEvent.click(await screen.findByRole('button', { name: /abrir/i }));
+  await userEvent.click(await screen.findByRole('button', { name: '#7' }));
   return screen.findByText(/Chamado #7/);
 }
 
@@ -172,22 +172,27 @@ describe('fila', () => {
     ));
   });
 
-  // Bug 2026-09-22: com 9 colunas a tabela estoura o container abaixo de ~1775px de
-  // viewport, e a coluna de acao -- a ULTIMA -- saia inteira da tela, com a barra de
-  // rolagem horizontal 1300px abaixo da dobra. O dono leu isso como "tiraram o botao".
-  // jsdom nao faz layout: o que este teste segura e o MECANISMO (a celula presa na borda
-  // direita). A medicao de pixels esta no doc do bug, feita com Playwright.
-  it('a celula do botao de abrir fica presa na borda direita da tabela', async () => {
+  // Bug 2026-09-22: o portao do detalhe vive na PRIMEIRA coluna, que e onde a rolagem
+  // lateral comeca. Antes ele era um botao "Abrir" na ULTIMA, e abaixo de ~1775px de
+  // viewport a tabela estourava o container e essa coluna saia inteira da tela -- com a
+  // barra de rolagem horizontal 1300px abaixo da dobra, o dono leu como "tiraram o botao".
+  it('o numero do chamado e a primeira coluna, e abre o detalhe', async () => {
     montarApi();
     render(<SupportTickets />);
 
-    const celula = (await screen.findByRole('button', { name: /abrir/i })).closest('td');
-    expect(celula.className).toMatch(/\bsticky\b/);
-    expect(celula.className).toMatch(/\bright-0\b/);
+    const linha = (await screen.findByText('o jogo nao abre no pc')).closest('tr');
+    const primeiraComRotulo = within(linha).getAllByRole('cell')[1];
+    expect(within(primeiraComRotulo).getByRole('button', { name: '#7' })).toBeInTheDocument();
 
-    const cabecalho = screen.getByRole('columnheader', { name: /chamado/i });
-    expect(cabecalho.className).toMatch(/\bsticky\b/);
-    expect(cabecalho.className).toMatch(/\bright-0\b/);
+    await userEvent.click(screen.getByRole('button', { name: '#7' }));
+    expect(await screen.findByText(/Chamado #7/)).toBeInTheDocument();
+  });
+
+  it('nao existe mais botao "Abrir" no fim da linha', async () => {
+    montarApi();
+    render(<SupportTickets />);
+    await screen.findByText('o jogo nao abre no pc');
+    expect(screen.queryByRole('button', { name: /^abrir$/i })).not.toBeInTheDocument();
   });
 });
 
@@ -220,12 +225,12 @@ describe('tela estreita (celular)', () => {
     expect(screen.getByText('O que o cliente disse')).toBeInTheDocument();
   });
 
-  it('o botao de abrir o chamado continua no cartao, e abre o detalhe', async () => {
+  it('o numero do chamado fica no topo do cartao, e abre o detalhe', async () => {
     montarApi();
     render(<SupportTickets />);
     await screen.findByText('o jogo nao abre no pc');
 
-    await userEvent.click(screen.getByRole('button', { name: /abrir/i }));
+    await userEvent.click(screen.getByRole('button', { name: '#7' }));
     expect(await screen.findByText(/Chamado #7/)).toBeInTheDocument();
   });
 
