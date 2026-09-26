@@ -308,6 +308,12 @@ export default function SalesDiagnostics() {
 
   const healthBlock = blocksData['agent-health'] || {};
   const healthData = healthBlock.data || {};
+  const healthVolume = healthData.volume_observado ?? 0;
+  const healthTruncamento = healthData.truncamento_pct ?? 0.0;
+  const healthFallback = healthData.fallback_pct ?? 0.0;
+  const healthRetries = healthData.retentativas_pct ?? 0.0;
+  const healthLatAvg = healthData.latencia_media_ms != null ? (healthData.latencia_media_ms / 1000).toFixed(1) : null;
+  const healthLatP95 = healthData.latencia_p95_ms != null ? (healthData.latencia_p95_ms / 1000).toFixed(1) : null;
 
   const summaryBlock = blocksData.summary || {};
   const summaryData = summaryBlock.data || {};
@@ -893,16 +899,50 @@ export default function SalesDiagnostics() {
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-gray-800">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Saúde do Agente de Vendas</span>
+              {healthBlock.availability === 'unavailable' ? (
+                <span className="text-[10px] uppercase font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded">Indisponível</span>
+              ) : healthVolume > 0 ? (
+                <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded font-semibold">
+                  {healthVolume} msgs avaliadas
+                </span>
+              ) : null}
             </div>
 
             <div className="mt-4 space-y-3">
               <div>
                 <div className="text-xs text-gray-400">Taxa de Truncamento</div>
                 <div className="text-2xl font-black text-gray-100">
-                  {healthData.truncamento_pct != null ? `${healthData.truncamento_pct}%` : '0.0%'}
+                  {healthTruncamento}%
                 </div>
-                <div className="text-xs text-gray-400 mt-2">
-                  Taxa de Fallback: <span className="font-semibold text-gray-200">{healthData.fallback_pct != null ? `${healthData.fallback_pct}%` : '0.0%'}</span>
+                <div className="text-[10px] text-gray-500 mt-0.5">
+                  {healthData.truncamento_count ? `${healthData.truncamento_count} respostas truncadas` : 'Nenhum truncamento detectado'}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-800/60 text-xs">
+                <div>
+                  <span className="text-gray-400">Taxa de Fallback</span>
+                  <div className="text-sm font-semibold text-gray-200 mt-0.5">
+                    {healthFallback}%
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-400">Retentativas</span>
+                  <div className="text-sm font-semibold text-gray-200 mt-0.5">
+                    {healthRetries}%
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-400">Latência Média</span>
+                  <div className="text-sm font-semibold text-gray-200 mt-0.5">
+                    {healthLatAvg != null ? `${healthLatAvg}s` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-400">Latência P95</span>
+                  <div className="text-sm font-semibold text-gray-200 mt-0.5">
+                    {healthLatP95 != null ? `${healthLatP95}s` : '—'}
+                  </div>
                 </div>
               </div>
 
