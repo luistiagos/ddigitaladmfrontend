@@ -296,6 +296,15 @@ export default function SalesDiagnostics() {
 
   const adsBlock = blocksData.ads || {};
   const adsData = adsBlock.data || {};
+  const adsMetrics = adsData.metrics || {};
+  const adsActivities = adsData.activities || {};
+
+  const adsSpend = adsData.spend ?? adsMetrics.spend ?? 0;
+  const adsClicks = adsData.clicks ?? adsMetrics.clicks ?? 0;
+  const adsCtr = adsData.ctr ?? adsMetrics.ctr ?? null;
+  const adsCpm = adsData.cpm ?? adsMetrics.cpm ?? 0;
+  const adsHumanEdits = adsData.human_edits_count ?? adsActivities.humana ?? 0;
+  const adsReach = adsData.reach !== undefined ? adsData.reach : adsMetrics.reach;
 
   const healthBlock = blocksData['agent-health'] || {};
   const healthData = healthBlock.data || {};
@@ -797,6 +806,16 @@ export default function SalesDiagnostics() {
             <div className="flex items-center justify-between pb-3 border-b border-gray-800">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Meta Ads</span>
+                {adsBlock.availability === 'unavailable' && (
+                  <span className="text-[10px] uppercase font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded">
+                    Indisponível
+                  </span>
+                )}
+                {adsBlock.availability === 'collecting' && (
+                  <span className="text-[10px] uppercase font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded animate-pulse">
+                    Coletando...
+                  </span>
+                )}
                 {adsBlock.stale && (
                   <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
                     Dados em Cache (Desatualizados)
@@ -818,7 +837,7 @@ export default function SalesDiagnostics() {
               <div>
                 <div className="text-xs text-gray-400">Investimento (Spend)</div>
                 <div className="text-2xl font-black text-gray-100">
-                  {formatCurrency(adsData.spend ?? 0)}
+                  {formatCurrency(adsSpend)}
                 </div>
                 {adsBlock.collected_at && (
                   <div className="text-[10px] text-gray-500 mt-0.5">
@@ -831,30 +850,30 @@ export default function SalesDiagnostics() {
                 <div>
                   <span className="text-gray-400">Cliques</span>
                   <div className="text-sm font-semibold text-gray-200 mt-0.5">
-                    {adsData.clicks ?? 0}
+                    {adsClicks}
                   </div>
                 </div>
                 <div>
                   <span className="text-gray-400">CTR</span>
                   <div className="text-sm font-semibold text-gray-200 mt-0.5">
-                    {adsData.ctr != null ? `${adsData.ctr}%` : '—'}
+                    {adsCtr != null ? `${adsCtr}%` : '—'}
                   </div>
                 </div>
                 <div>
                   <span className="text-gray-400">CPM</span>
                   <div className="text-sm font-semibold text-gray-200 mt-0.5">
-                    {formatCurrency(adsData.cpm ?? 0)}
+                    {formatCurrency(adsCpm)}
                   </div>
                 </div>
                 <div>
                   <span className="text-gray-400">Alterações Humanas</span>
                   <div className="text-sm font-semibold text-gray-200 mt-0.5">
-                    {adsData.human_edits_count ?? 0}
+                    {adsHumanEdits}
                   </div>
                 </div>
               </div>
 
-              {adsData.reach === null && (
+              {adsReach === null && (
                 <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-800/40">
                   Alcance não é aditivo entre contas ou campanhas distintas.
                 </div>
