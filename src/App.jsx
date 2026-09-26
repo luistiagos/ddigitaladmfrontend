@@ -27,6 +27,7 @@ import RemarketingCampaigns from '@/pages/RemarketingCampaigns';
 import RemarketingWorkflows from '@/pages/RemarketingWorkflows';
 import WhatsAppSenderConfig from '@/pages/WhatsAppSenderConfig';
 import WhatsAppTelemetry from '@/pages/WhatsAppTelemetry';
+import SalesDiagnostics from '@/pages/SalesDiagnostics';
 
 
 export default function App() {
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="leads" element={<Leads />} />
             <Route path="leads/dashboard" element={<LeadsDashboard />} />
             <Route path="leads-dashboard" element={<LeadsDashboard />} />
+            <Route path="diagnostico-vendas" element={<SalesDiagnostics />} />
             <Route path="configuracoes" element={<Settings />} />
             <Route path="bot" element={<BotConfig />} />
             <Route path="cupons" element={<Coupons />} />

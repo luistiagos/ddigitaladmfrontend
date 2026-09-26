@@ -30,6 +30,7 @@ import {
   HeartPulse,
   ShieldAlert,
   Layers,
+  TrendingDown,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
@@ -47,6 +48,7 @@ const NAV_GROUPS = [
       { to: '/disputas',   label: 'Disputas',     icon: AlertOctagon },
       { to: '/leads',      label: 'Leads',        icon: Target },
       { to: '/leads/dashboard', label: 'Dashboard de Leads', icon: Layers },
+      { to: '/diagnostico-vendas', label: 'Diagnóstico de Vendas', icon: TrendingDown },
     ],
   },
   {
