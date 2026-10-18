@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle, Eye, Activity, KeyRound, Save, Trash2, Plus, X } from 'lucide-react';
+import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle, Eye, Activity, KeyRound, Save, Trash2, Plus, X, DollarSign } from 'lucide-react';
 import api from '@/services/api';
 
 function DiagStep({ step }) {
@@ -28,6 +28,124 @@ function DiagStep({ step }) {
           </pre>
         )}
       </div>
+    </div>
+  );
+}
+
+const formatUsd = (v) => `US$ ${Number(v).toFixed(2).replace('.', ',')}`;
+
+/**
+ * Teto de custo de LLM por comprador no pós-venda (0 desliga).
+ * Estado próprio, sem o `.catch(() => {})` dos outros cards: erro na leitura aparece e
+ * bloqueia salvar, para o dono nunca ver como vigente um valor que não foi lido. A validação
+ * do valor vive só no backend (`llm_budget.validar_teto`); o card mostra o motivo do 400.
+ * Doc: docs/modules/chatbot-whatsapp/changes/2026-10-16-teto-de-custo-llm-por-comprador/spec.md
+ */
+export function LlmBudgetCapCard() {
+  const [cap, setCap] = useState(null);          // {teto, padrao} lido do servidor
+  const [loadError, setLoadError] = useState(null);
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);          // {type, text}
+
+  async function load() {
+    setLoadError(null);
+    setCap(null);
+    try {
+      const res = await api.get('/admin/wpp/llm_budget_cap');
+      setCap(res.data);
+      setValue(String(res.data.teto).replace('.', ','));
+    } catch (err) {
+      setLoadError(err.response?.data?.error || 'Erro ao ler o teto de custo.');
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await api.post('/admin/wpp/llm_budget_cap', { teto: value });
+      setCap({ teto: res.data.teto, padrao: res.data.padrao });
+      setValue(String(res.data.teto).replace('.', ','));
+      setMsg({ type: 'success', text: 'Teto salvo.' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.error || 'Erro ao salvar o teto.' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const loaded = cap !== null;
+  return (
+    <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
+      <h2 className="text-base font-semibold text-white flex items-center gap-2">
+        <DollarSign className="h-4 w-4 text-emerald-400" />
+        Teto de custo de IA por comprador
+      </h2>
+      <p className="text-xs text-gray-500 mt-0.5 mb-4">
+        Quando o pós-venda de um comprador passa deste valor, o bot para de responder e a
+        conversa vai para a fila humana com chamado. Vale na mensagem seguinte, sem deploy.
+      </p>
+
+      {loadError ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-red-400 flex items-center gap-2" role="alert">
+            <XCircle className="h-4 w-4" /> {loadError}
+          </p>
+          <button
+            type="button"
+            onClick={load}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 transition"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Tentar de novo
+          </button>
+        </div>
+      ) : !loaded ? (
+        <div className="text-sm text-gray-400 flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" /> Carregando teto…
+        </div>
+      ) : (
+        <p className="text-sm text-gray-300" data-testid="teto-vigente">
+          Vigente: <span className="font-semibold text-white">{formatUsd(cap.teto)}</span>
+          {Number(cap.teto) === 0 ? (
+            <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">desligado</span>
+          ) : cap.padrao ? (
+            <span className="ml-2 rounded bg-gray-700 px-1.5 py-0.5 text-xs text-gray-300">padrão</span>
+          ) : null}
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <div>
+          <label htmlFor="llm-budget-cap" className="text-xs text-gray-400 mb-1 block">Teto em US$</label>
+          <input
+            id="llm-budget-cap"
+            type="text"
+            inputMode="decimal"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            disabled={!loaded}
+            className="w-32 rounded-lg bg-gray-700/50 border border-gray-600 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:opacity-50 transition"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!loaded || saving}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium transition"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Salvar teto
+        </button>
+        <span className="text-xs text-gray-500 pb-2">0 desliga · de 0 a 100, até 2 casas</span>
+      </div>
+      {msg && (
+        <p className={`text-xs mt-2.5 ${msg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+          {msg.text}
+        </p>
+      )}
     </div>
   );
 }
@@ -380,6 +498,9 @@ export default function BotConfig() {
             </button>
           </div>
         </div>
+
+        {/* ── Teto de custo de IA por comprador ── */}
+        <LlmBudgetCapCard />
 
         {/* ── Linha de teste do dono ── */}
         <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
