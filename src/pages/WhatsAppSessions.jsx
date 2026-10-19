@@ -8,6 +8,7 @@ import { formatDateTime } from '@/utils/format';
 import Field from '@/components/whatsapp/Field';
 import AgentModal from '@/components/whatsapp/AgentModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
+import LlmCostCell, { textoLlmCost } from '@/components/whatsapp/LlmCostCell';
 import { FALLBACK_AGENTS, getAgentLabel, getSessionKey } from '@/components/whatsapp/sessionHelpers';
 
 const PER_PAGE = 20;
@@ -198,6 +199,15 @@ export default function WhatsAppSessions() {
         </button>
       ),
       csvValue: (row) => getAgentLabel(agents, row.current_agent),
+    },
+    {
+      // Sem `sortable`: ordenar por custo exigiria calcular o de todas as conversas, nao so o
+      // da pagina (D5).
+      key: 'llm_cost',
+      label: 'Custo IA',
+      className: 'px-4 py-3',
+      render: (row) => <LlmCostCell cost={row.llm_cost} />,
+      csvValue: (row) => textoLlmCost(row.llm_cost),
     },
     {
       key: 'dont_touch',

@@ -613,3 +613,41 @@ describe('acoes de sessao pelo chamado', () => {
     ));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Custo de IA (T8 do teto por comprador -- EARS-30, 31, 34)
+// docs/modules/chatbot-whatsapp/changes/2026-10-16-teto-de-custo-llm-por-comprador/
+// ---------------------------------------------------------------------------
+
+describe('custo de IA', () => {
+  it('coluna_custo', async () => {
+    montarApi({
+      items: [
+        chamado({ llm_cost: { total: 1.23, pos_venda: 0.8, teto: 4, teto_atingido: false } }),
+        chamado({ id: 8, msg_abertura: 'sem custo', llm_cost: null }),
+      ],
+    });
+    render(<SupportTickets />);
+    const linha = (await screen.findByText('o jogo nao abre no pc')).closest('tr');
+    expect(within(linha).getByText('US$ 1,23')).toBeInTheDocument();
+    expect(within(linha).getByText('pós-venda US$ 0,80 de 4,00')).toBeInTheDocument();
+
+    // O custo que falhou nao derruba a linha: o resto dela continua na tela.
+    const semCusto = screen.getByText('sem custo').closest('tr');
+    expect(within(semCusto).getByTitle('custo indisponível')).toHaveTextContent('—');
+    expect(within(semCusto).getByRole('button', { name: '#8' })).toBeInTheDocument();
+  });
+
+  it('detalhe_mostra_custo', async () => {
+    // O detalhe le o PROPRIO custo (aliases completos), nao o da linha da fila.
+    montarApi({
+      items: [chamado({ llm_cost: { total: 1.23, pos_venda: 0.8, teto: 4, teto_atingido: false } })],
+      detalhe: chamado({ llm_cost: { total: 9.99, pos_venda: 4.5, teto: 4, teto_atingido: true } }),
+    });
+    render(<SupportTickets />);
+    await abrirDetalhe();
+    expect(screen.getByText('US$ 9,99')).toBeInTheDocument();
+    expect(screen.getByText('pós-venda US$ 4,50 de 4,00')).toBeInTheDocument();
+    expect(screen.getByText('teto atingido')).toBeInTheDocument();
+  });
+});

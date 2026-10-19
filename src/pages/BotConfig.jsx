@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle, Eye, Activity, KeyRound, Save, Trash2, Plus, X, DollarSign } from 'lucide-react';
 import api from '@/services/api';
+import { formatUsd } from '@/utils/format';
 
 function DiagStep({ step }) {
   return (
@@ -31,8 +32,6 @@ function DiagStep({ step }) {
     </div>
   );
 }
-
-const formatUsd = (v) => `US$ ${Number(v).toFixed(2).replace('.', ',')}`;
 
 /**
  * Teto de custo de LLM por comprador no pós-venda (0 desliga).

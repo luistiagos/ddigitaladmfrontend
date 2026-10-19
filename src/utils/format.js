@@ -92,6 +92,11 @@ export function formatCurrency(value) {
   });
 }
 
+/** Custo de IA em dolar ("US$ 4,17"): o card do teto e a coluna de custo leem daqui. */
+export function formatUsd(value) {
+  return `US$ ${Number(value).toFixed(2).replace('.', ',')}`;
+}
+
 /** Return today in YYYY-MM-DD format (local time, not UTC) */
 export function todayISO() {
   const d = new Date();

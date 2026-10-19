@@ -23,6 +23,7 @@ import { formatUtcDateTime, formatPhone } from '@/utils/format';
 import useAdminGrid from '@/utils/useAdminGrid';
 import AgentModal from '@/components/whatsapp/AgentModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
+import LlmCostCell, { textoLlmCost } from '@/components/whatsapp/LlmCostCell';
 import { FALLBACK_AGENTS } from '@/components/whatsapp/sessionHelpers';
 
 const PER_PAGE = 20;
@@ -344,6 +345,14 @@ export default function SupportTickets() {
         <span className={row.compras_status === 'ok' ? '' : 'text-gray-400'}>{textoCompras(row)}</span>
       ),
       csvValue: (row) => textoCompras(row),
+    },
+    {
+      // Sem `sortable` (D5): o custo so existe para as linhas da pagina.
+      key: 'llm_cost',
+      label: 'Custo IA',
+      className: 'px-4 py-3',
+      render: (row) => <LlmCostCell cost={row.llm_cost} />,
+      csvValue: (row) => textoLlmCost(row.llm_cost),
     },
     {
       key: 'status',
@@ -736,6 +745,7 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
                   <Linha rotulo="Procurado por">{ticket.compras_busca}</Linha>
                 )}
                 <Linha rotulo="Acesso">{textoAcesso(ticket)}</Linha>
+                <Linha rotulo="Custo IA"><LlmCostCell cost={ticket.llm_cost} /></Linha>
               </Secao>
 
               <Secao titulo="O que o cliente disse">
