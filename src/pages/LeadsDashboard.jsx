@@ -163,7 +163,7 @@ function OrigemVendas({ origem, loading }) {
                     <div className="text-[11px] text-gray-400 font-medium">{c.label}</div>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className={`text-xl font-black ${c.text}`}>{formatPct(item.pct)}</span>
-                      <span className="text-xs text-gray-400">{formatNumber(item.n)} compradores</span>
+                      <span className="text-xs text-gray-400">{formatNumber(item.n)} {item.n === 1 ? 'comprador' : 'compradores'}</span>
                     </div>
                     <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden mt-2">
                       <div className={`h-full ${c.bar}`} style={{ width: `${Math.min(100, item.pct || 0)}%` }} />
