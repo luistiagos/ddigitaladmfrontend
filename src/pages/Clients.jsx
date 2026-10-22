@@ -8,6 +8,7 @@ import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import ClientProductsModal from '@/modals/ClientProductsModal';
 import EditClientModal from '@/modals/EditClientModal';
 import useAdminGrid from '@/utils/useAdminGrid';
+import { formatUtcDateTime } from '@/utils/format';
 
 const PER_PAGE = 20;
 
@@ -26,7 +27,7 @@ export default function Clients() {
   const [toggling, setToggling] = useState(false);
   const [toEdit, setToEdit] = useState(null);
   const { page, setPage, sortColumn, sortDirection, handleSort } =
-    useAdminGrid({ defaultSort: 'created_at', defaultDir: 'desc' });
+    useAdminGrid({ defaultSort: 'last_purchase_at', defaultDir: 'desc' });
 
   // load products for filter dropdown
   useEffect(() => {
@@ -98,6 +99,12 @@ export default function Clients() {
       key: 'phone', label: 'WhatsApp', sortable: true, fullCell: true,
       render: r => <PhoneCell phone={r.phone} />,
       csvValue: r => r.phone ?? '',
+    },
+    {
+      // Ultima compra APROVADA (UTC na API, exibida em BRT); sem compra aprovada -> "—".
+      key: 'last_purchase_at', label: 'Última compra', sortable: true,
+      render: r => <span className="whitespace-nowrap">{formatUtcDateTime(r.last_purchase_at)}</span>,
+      csvValue: r => r.last_purchase_at ?? '',
     },
     {
       key: 'status', label: 'Status',
