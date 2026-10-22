@@ -70,6 +70,164 @@ function getPresetDates(preset) {
   return { start: format(today), end: format(today) };
 }
 
+// Origem das vendas (docs/modules/remarketing/changes/2026-10-12-origem-das-vendas-meta-ou-sem-sinal/).
+// O backend calcula as 4 janelas; a tela só escolhe uma (EARS-10). Números só com
+// `disponivel === true`: campo ausente ou falso é "indisponível", nunca zero (EARS-13).
+const ORIGEM_JANELAS = [1, 7, 28, 90];
+
+const ORIGEM_CLASSES = [
+  { key: 'meta', label: 'Meta (Facebook/Instagram)', bar: 'bg-blue-500', text: 'text-blue-300' },
+  { key: 'sem_sinal', label: 'Sem sinal do Meta', bar: 'bg-gray-400', text: 'text-gray-200' },
+  { key: 'sem_dados', label: 'Sem dados para classificar', bar: 'bg-amber-500', text: 'text-amber-300' },
+];
+
+const ORIGEM_VIAS = [
+  { key: 'no_checkout', label: 'No checkout' },
+  { key: 'visita_anterior', label: 'Visita anterior' },
+  { key: 'anuncio_whatsapp', label: 'Anúncio para WhatsApp' },
+];
+
+const ORIGEM_FAIXAS = [
+  { key: 'ate_1d', label: 'Até 1 dia' },
+  { key: 'de_1_a_7d', label: '1 a 7 dias' },
+  { key: 'de_7_a_28d', label: '7 a 28 dias' },
+  { key: 'de_28_a_90d', label: '28 a 90 dias' },
+];
+
+function formatPct(pct) {
+  return `${Number(pct).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+function OrigemVendas({ origem, loading }) {
+  const [janelaEscolhida, setJanelaEscolhida] = useState(null);
+  const disponivel = origem?.disponivel === true;
+  const janela = janelaEscolhida ?? origem?.janela_padrao ?? 7;
+  const bloco = disponivel ? origem.por_janela?.[String(janela)] : null;
+  const total = disponivel ? origem.total_compradores : null;
+
+  let corpo;
+  if (loading) {
+    corpo = <div className="py-6 text-center text-gray-500 text-sm">Carregando...</div>;
+  } else if (!disponivel || !bloco) {
+    corpo = (
+      <div className="py-6 flex items-center justify-center gap-2 text-gray-400 text-sm">
+        <AlertCircle className="h-4 w-4 text-amber-400" />
+        Origem das vendas indisponível
+      </div>
+    );
+  } else {
+    corpo = (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              Compradores do período
+            </div>
+            <div className="text-2xl font-black text-white">{formatNumber(total)}</div>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              Cada lead conta uma vez ({formatNumber(origem.total_pagamentos)} pagamentos). Não é a etapa
+              “Vendas Aprovadas” do funil.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs flex-wrap">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">
+              Janela do clique:
+            </span>
+            {ORIGEM_JANELAS.map((j) => (
+              <button
+                key={j}
+                type="button"
+                aria-pressed={j === janela}
+                onClick={() => setJanelaEscolhida(j)}
+                className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all ${
+                  j === janela
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'bg-gray-900/60 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700/60'
+                }`}
+              >
+                {j === 1 ? '1 dia' : `${j} dias`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {total === 0 ? (
+          <div className="py-4 text-center text-gray-400 text-sm">Nenhuma venda no período</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {ORIGEM_CLASSES.map((c) => {
+                const item = bloco[c.key] || {};
+                return (
+                  <div key={c.key} className="bg-gray-900/70 border border-gray-800 rounded-xl p-3">
+                    <div className="text-[11px] text-gray-400 font-medium">{c.label}</div>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className={`text-xl font-black ${c.text}`}>{formatPct(item.pct)}</span>
+                      <span className="text-xs text-gray-400">{formatNumber(item.n)} compradores</span>
+                    </div>
+                    <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden mt-2">
+                      <div className={`h-full ${c.bar}`} style={{ width: `${Math.min(100, item.pct || 0)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  Vendas Meta por via (janela de {janela === 1 ? '1 dia' : `${janela} dias`})
+                </div>
+                {ORIGEM_VIAS.map((v) => (
+                  <div key={v.key} className="flex items-center justify-between py-0.5">
+                    <span className="text-gray-400">{v.label}</span>
+                    <span className="font-bold text-gray-200">{formatNumber(bloco.vias?.[v.key])}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  Tempo entre o clique e a compra (até 90 dias)
+                </div>
+                {ORIGEM_FAIXAS.map((f) => (
+                  <div key={f.key} className="flex items-center justify-between py-0.5">
+                    <span className="text-gray-400">{f.label}</span>
+                    <span className="font-bold text-gray-200">{formatNumber(origem.faixas_atraso?.[f.key])}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        <p className="text-[11px] text-gray-500 leading-relaxed border-t border-gray-800 pt-3">
+          “Sem sinal do Meta” inclui outros canais (TikTok, Google, indicação), clique em outro aparelho sem
+          contato informado, visualização sem clique e rastro apagado pelo navegador. O total não é comparável
+          ao “Purchase” do Gerenciador de Anúncios.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section
+      aria-labelledby="origem-vendas-titulo"
+      className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg"
+    >
+      <div className="mb-4">
+        <h2 id="origem-vendas-titulo" className="text-base font-bold text-white flex items-center gap-2">
+          <Percent className="h-5 w-5 text-violet-400" />
+          Origem das vendas
+        </h2>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Que parte dos compradores clicou num anúncio ou post do Facebook/Instagram antes de comprar
+        </p>
+      </div>
+      {corpo}
+    </section>
+  );
+}
+
 export default function LeadsDashboard() {
   const [preset, setPreset] = useState('this_month');
   const [startDate, setStartDate] = useState(() => getPresetDates('this_month').start);
@@ -758,6 +916,8 @@ export default function LeadsDashboard() {
           </button>
         </div>
       </div>
+
+      <OrigemVendas origem={stats?.origem_vendas} loading={loading} />
 
       {/* Time Series Evolution Chart */}
       <div className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg space-y-4">
