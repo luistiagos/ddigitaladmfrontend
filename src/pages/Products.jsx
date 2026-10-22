@@ -256,7 +256,9 @@ export default function Products() {
                 </div>
 
                 {/* Actions */}
-                <div className="px-4 pb-4 flex gap-2">
+                {/* flex-wrap: os tres botoes nao encolhem abaixo do rotulo (~247 px) e o cartao
+                    chega a ~235 px no inicio do lg/xl; sem quebra, o overflow-hidden cortava o Excluir */}
+                <div className="px-4 pb-4 flex flex-wrap gap-2">
                   <button
                     onClick={() => openEdit(p)}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
