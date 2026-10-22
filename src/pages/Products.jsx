@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight, Search, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader2, Package, ImageOff, ShoppingCart, ChevronLeft, ChevronRight, Search, Copy, ShieldCheck } from 'lucide-react';
 import api from '@/services/api';
+import Badge from '@/components/ui/Badge';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import PackageDireitoModal, { seloDoCadastro } from '@/modals/PackageDireitoModal';
 import { formatCurrency } from '@/utils/format';
 
-const EMPTY_FORM = { title: '', price: '', image: '', purchaselink: '', deliverlink: '', prd_content: '', add_pkg: '' };
+// Sem `add_pkg` ("Metadados/Sub-pacotes"): vazio nos 131 pacotes, ninguem le, e seria uma segunda
+// fonte ao lado dos pacotes incluidos do cadastro de direito (EARS-13). O backend segue aceitando.
+const EMPTY_FORM = { title: '', price: '', image: '', purchaselink: '', deliverlink: '', prd_content: '' };
 const PER_PAGE = 20;
 
 export default function Products() {
@@ -34,6 +38,7 @@ export default function Products() {
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [copying, setCopying] = useState(null);
+  const [direitoDe, setDireitoDe] = useState(null);
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
@@ -78,7 +83,6 @@ export default function Products() {
       purchaselink: p.purchaselink || '',
       deliverlink: p.deliverlink || '',
       prd_content: p.prd_content || '',
-      add_pkg: p.add_pkg || '',
     });
     setImgPreview(p.image || '');
     setImgError(false);
@@ -107,7 +111,6 @@ export default function Products() {
         image: form.image.trim() || null,
         purchaselink: form.purchaselink.trim() || null,
         deliverlink: form.deliverlink.trim() || null,
-        add_pkg: form.add_pkg.trim() || null,
         prd_content: form.prd_content.trim() || null,
       };
       if (editing) {
@@ -147,7 +150,6 @@ export default function Products() {
         image: p.image || null,
         purchaselink: p.purchaselink || null,
         deliverlink: p.deliverlink || null,
-        add_pkg: p.add_pkg || null,
         prd_content: p.prd_content || null,
       };
       const res = await api.post('/admin/items', payload);
@@ -212,9 +214,15 @@ export default function Products() {
 
       {!loading && !error && products.length > 0 && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {products.map(p => (
-              <div key={p.id} className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden flex flex-col">
+              <li
+                key={p.id}
+                aria-label={`produto ${p.id}`}
+                className={`bg-gray-800 border rounded-xl overflow-hidden flex flex-col ${
+                  aVendaSemCadastro(p.direito) ? 'border-red-500/60 ring-1 ring-red-500/30' : 'border-gray-700'
+                }`}
+              >
                 {/* Image */}
                 <ProductImage image={p.image} title={p.title} />
 
@@ -222,6 +230,15 @@ export default function Products() {
                 <div className="p-4 flex flex-col gap-2 flex-1">
                   <h3 className="font-semibold text-white text-sm leading-tight">{p.title}</h3>
                   <span className="text-green-400 font-semibold text-base">{formatCurrency(p.price)}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <SeloDoDireito direito={p.direito} />
+                    <button
+                      onClick={() => setDireitoDe(p)}
+                      className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300"
+                    >
+                      <ShieldCheck className="h-3 w-3" /> Direito do app
+                    </button>
+                  </div>
                   {p.purchaselink && (
                     <a href={p.purchaselink} target="_blank" rel="noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 truncate">
@@ -263,9 +280,9 @@ export default function Products() {
                     <Trash2 className="h-3.5 w-3.5" /> Excluir
                   </button>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -357,17 +374,6 @@ export default function Products() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Metadados/Sub-pacotes (JSON)</label>
-                  <input
-                    type="text"
-                    value={form.add_pkg}
-                    onChange={e => setForm(f => ({ ...f, add_pkg: e.target.value }))}
-                    placeholder="ex: [9021115]"
-                    className={inputCls}
-                  />
-                </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-gray-400 mb-1.5">Benefícios/Destaques (um por linha)</label>
                   <textarea
@@ -445,7 +451,38 @@ export default function Products() {
           onCancel={() => setToDelete(null)}
         />
       )}
+
+      {direitoDe && (
+        <PackageDireitoModal
+          pacote={direitoDe}
+          onClose={() => setDireitoDe(null)}
+          onChanged={fetchProducts}
+        />
+      )}
     </div>
+  );
+}
+
+// Estado do cadastro de direito na lista (EARS-12). `direito: null` = a consulta do estado falhou
+// no backend: mostra "?" e o produto continua na lista.
+function aVendaSemCadastro(direito) {
+  return !!direito && direito.estado === 'nao_configurado' && direito.a_venda_em_loja_ligada;
+}
+
+function SeloDoDireito({ direito }) {
+  if (!direito) {
+    return (
+      <span title="Não foi possível ler o estado do cadastro de direito">
+        <Badge variant="gray">direito: ?</Badge>
+      </span>
+    );
+  }
+  const selo = seloDoCadastro(direito);
+  return (
+    <>
+      <Badge variant={selo.variant}>{selo.label}</Badge>
+      {aVendaSemCadastro(direito) && <Badge variant="red">à venda em loja ligada sem cadastro</Badge>}
+    </>
   );
 }
 
