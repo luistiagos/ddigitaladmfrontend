@@ -29,6 +29,29 @@ function formatNumber(num) {
   return Number(num).toLocaleString('pt-BR');
 }
 
+function calculateMovingAverage(items, windowSize, getValue) {
+  if (!items || !items.length) return [];
+  if (!windowSize || windowSize <= 1) {
+    return items.map((item) => getValue(item));
+  }
+
+  return items.map((item, idx) => {
+    const startIdx = Math.max(0, idx - windowSize + 1);
+    let sum = 0;
+    let count = 0;
+    for (let k = startIdx; k <= idx; k++) {
+      const v = getValue(items[k]);
+      if (typeof v === 'number' && !isNaN(v)) {
+        sum += v;
+        count++;
+      }
+    }
+    if (count === 0) return 0;
+    const avg = sum / count;
+    return Math.round(avg * 10) / 10;
+  });
+}
+
 function getPresetDates(preset) {
   const today = new Date();
   const format = (d) => {
@@ -259,6 +282,21 @@ export default function LeadsDashboard() {
     initiate_to_purchase_pct: true,
     overall_conversion_pct: true,
   });
+
+  // Moving average state (checkbox & window)
+  const [enableMovingAverage, setEnableMovingAverage] = useState(false);
+  const [movingAverageWindow, setMovingAverageWindow] = useState(7);
+
+  // Keep window adapted when groupBy changes
+  useEffect(() => {
+    if (groupBy === 'weekly') {
+      setMovingAverageWindow(4);
+    } else if (groupBy === 'monthly') {
+      setMovingAverageWindow(3);
+    } else {
+      setMovingAverageWindow(7);
+    }
+  }, [groupBy]);
 
   // Fetch stores list
   useEffect(() => {
@@ -928,6 +966,11 @@ export default function LeadsDashboard() {
               {chartTab === 'rates' ? 'Evolução das Taxas de Conversão (%)' : 'Evolução dos Volumes dos Estágios'}{' '}
               <span className="text-xs font-normal text-gray-400">
                 ({groupBy === 'daily' ? 'Diário' : groupBy === 'weekly' ? 'Semanal' : 'Mensal'})
+                {enableMovingAverage && (
+                  <span className="text-violet-300 font-medium ml-1">
+                    • Média Móvel ({movingAverageWindow} {groupBy === 'daily' ? 'dias' : groupBy === 'weekly' ? 'sem.' : 'meses'})
+                  </span>
+                )}
               </span>
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
@@ -937,32 +980,83 @@ export default function LeadsDashboard() {
             </p>
           </div>
 
-          {/* Mode Switcher Tabs (Rates vs Volumes) */}
-          <div className="flex items-center bg-gray-900/90 p-1 rounded-xl border border-gray-700/70 shrink-0 self-start">
-            <button
-              type="button"
-              onClick={() => setChartTab('rates')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                chartTab === 'rates'
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <Percent className="h-3.5 w-3.5" />
-              Taxas de Conversão (%)
-            </button>
-            <button
-              type="button"
-              onClick={() => setChartTab('volumes')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                chartTab === 'volumes'
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <Layers className="h-3.5 w-3.5" />
-              Volume dos Estágios (Qtd)
-            </button>
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-start lg:self-center">
+            {/* Checkbox Média Móvel */}
+            <div className="flex items-center bg-gray-900/90 p-1 rounded-xl border border-gray-700/70">
+              <label
+                htmlFor="toggle-moving-average"
+                className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer select-none transition-all ${
+                  enableMovingAverage ? 'text-violet-300' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  id="toggle-moving-average"
+                  checked={enableMovingAverage}
+                  onChange={(e) => setEnableMovingAverage(e.target.checked)}
+                  className="rounded border-gray-600 bg-gray-800 text-violet-600 focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer"
+                />
+                <span>Média Móvel</span>
+              </label>
+
+              {enableMovingAverage && (
+                <select
+                  id="select-moving-average-window"
+                  value={movingAverageWindow}
+                  onChange={(e) => setMovingAverageWindow(Number(e.target.value))}
+                  aria-label="Janela da média móvel"
+                  className="bg-gray-800 border border-gray-700 text-violet-300 text-xs font-medium rounded-lg px-2 py-1 mr-1 focus:ring-1 focus:ring-violet-500 focus:outline-none cursor-pointer"
+                >
+                  {groupBy === 'daily' && (
+                    <>
+                      <option value={7}>7 dias</option>
+                      <option value={14}>14 dias</option>
+                      <option value={30}>30 dias</option>
+                    </>
+                  )}
+                  {groupBy === 'weekly' && (
+                    <>
+                      <option value={4}>4 semanas</option>
+                      <option value={8}>8 semanas</option>
+                    </>
+                  )}
+                  {groupBy === 'monthly' && (
+                    <>
+                      <option value={3}>3 meses</option>
+                      <option value={6}>6 meses</option>
+                    </>
+                  )}
+                </select>
+              )}
+            </div>
+
+            {/* Mode Switcher Tabs (Rates vs Volumes) */}
+            <div className="flex items-center bg-gray-900/90 p-1 rounded-xl border border-gray-700/70">
+              <button
+                type="button"
+                onClick={() => setChartTab('rates')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  chartTab === 'rates'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <Percent className="h-3.5 w-3.5" />
+                Taxas de Conversão (%)
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartTab('volumes')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  chartTab === 'volumes'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                Volume dos Estágios (Qtd)
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1011,31 +1105,46 @@ export default function LeadsDashboard() {
                 })}
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (chartTab === 'rates') {
-                setVisibleRateSeries({
-                  pageview_to_cart_pct: true,
-                  cart_to_lead_pct: true,
-                  lead_to_initiate_pct: true,
-                  initiate_to_purchase_pct: true,
-                  overall_conversion_pct: true,
-                });
-              } else {
-                setVisibleSeries({
-                  PageView: true,
-                  AddToCart: true,
-                  Lead: true,
-                  InitiateCheckout: true,
-                  Purchase: true,
-                });
-              }
-            }}
-            className="text-[11px] text-violet-400 hover:text-violet-300 underline"
-          >
-            Ativar todas as séries
-          </button>
+          <div className="flex items-center gap-3">
+            {enableMovingAverage && (
+              <div className="flex items-center gap-2.5 text-[11px] text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded-lg border border-gray-800">
+                <span className="flex items-center gap-1">
+                  <span className="w-3.5 h-0.5 bg-violet-400 inline-block rounded" />
+                  Média móvel
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-3.5 h-0 border-b border-dashed border-gray-400 inline-block opacity-60" />
+                  Dados reais
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                if (chartTab === 'rates') {
+                  setVisibleRateSeries({
+                    pageview_to_cart_pct: true,
+                    cart_to_lead_pct: true,
+                    lead_to_initiate_pct: true,
+                    initiate_to_purchase_pct: true,
+                    overall_conversion_pct: true,
+                  });
+                } else {
+                  setVisibleSeries({
+                    PageView: true,
+                    AddToCart: true,
+                    Lead: true,
+                    InitiateCheckout: true,
+                    Purchase: true,
+                  });
+                }
+              }}
+              className="text-[11px] text-violet-400 hover:text-violet-300 underline"
+            >
+              Ativar todas as séries
+            </button>
+          </div>
         </div>
 
         {/* SVG Chart */}
@@ -1070,15 +1179,37 @@ export default function LeadsDashboard() {
                 {chartTab === 'rates' &&
                   rateSeriesMeta.map((s) => {
                     if (!visibleRateSeries[s.key]) return null;
-                    const pts = timeSeries.map((item, idx) => {
+                    const rawValues = timeSeries.map((item) => getRateSeriesValue(item, s.key));
+                    const maValues = enableMovingAverage
+                      ? calculateMovingAverage(timeSeries, movingAverageWindow, (item) => getRateSeriesValue(item, s.key))
+                      : rawValues;
+
+                    const pts = maValues.map((val, idx) => {
                       const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
-                      const val = getRateSeriesValue(item, s.key);
+                      const y = 200 - (val / rateChartMax) * 180;
+                      return `${x},${y}`;
+                    });
+
+                    const rawPts = rawValues.map((val, idx) => {
+                      const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
                       const y = 200 - (val / rateChartMax) * 180;
                       return `${x},${y}`;
                     });
 
                     return (
                       <g key={s.key}>
+                        {enableMovingAverage && (
+                          <polyline
+                            fill="none"
+                            stroke={s.color}
+                            strokeWidth="1.2"
+                            strokeDasharray="3 3"
+                            strokeOpacity="0.3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={rawPts.join(' ')}
+                          />
+                        )}
                         <polyline
                           fill="none"
                           stroke={s.color}
@@ -1089,8 +1220,13 @@ export default function LeadsDashboard() {
                         />
                         {timeSeries.map((item, idx) => {
                           const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
-                          const val = getRateSeriesValue(item, s.key);
+                          const val = maValues[idx];
+                          const rawVal = rawValues[idx];
                           const y = 200 - (val / rateChartMax) * 180;
+                          const titleText = enableMovingAverage
+                            ? `${s.label}: ${val}% (Média móvel ${movingAverageWindow}${groupBy === 'daily' ? 'd' : 'p'}) • Real: ${rawVal}% (${item.label || item.period})`
+                            : `${s.label}: ${val}% (${item.label || item.period})`;
+
                           return (
                             <circle
                               key={idx}
@@ -1100,7 +1236,7 @@ export default function LeadsDashboard() {
                               fill={s.color}
                               className="hover:r-5 transition-all cursor-pointer"
                             >
-                              <title>{`${s.label}: ${val}% (${item.label || item.period})`}</title>
+                              <title>{titleText}</title>
                             </circle>
                           );
                         })}
@@ -1112,15 +1248,37 @@ export default function LeadsDashboard() {
                 {chartTab === 'volumes' &&
                   seriesMeta.map((s) => {
                     if (!visibleSeries[s.key]) return null;
-                    const pts = timeSeries.map((item, idx) => {
+                    const rawValues = timeSeries.map((item) => getSeriesValue(item, s.key));
+                    const maValues = enableMovingAverage
+                      ? calculateMovingAverage(timeSeries, movingAverageWindow, (item) => getSeriesValue(item, s.key))
+                      : rawValues;
+
+                    const pts = maValues.map((val, idx) => {
                       const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
-                      const val = getSeriesValue(item, s.key);
+                      const y = 200 - (val / chartMax) * 180;
+                      return `${x},${y}`;
+                    });
+
+                    const rawPts = rawValues.map((val, idx) => {
+                      const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
                       const y = 200 - (val / chartMax) * 180;
                       return `${x},${y}`;
                     });
 
                     return (
                       <g key={s.key}>
+                        {enableMovingAverage && (
+                          <polyline
+                            fill="none"
+                            stroke={s.color}
+                            strokeWidth="1.2"
+                            strokeDasharray="3 3"
+                            strokeOpacity="0.3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={rawPts.join(' ')}
+                          />
+                        )}
                         <polyline
                           fill="none"
                           stroke={s.color}
@@ -1131,8 +1289,13 @@ export default function LeadsDashboard() {
                         />
                         {timeSeries.map((item, idx) => {
                           const x = 50 + (idx / Math.max(1, timeSeries.length - 1)) * 730;
-                          const val = getSeriesValue(item, s.key);
+                          const val = maValues[idx];
+                          const rawVal = rawValues[idx];
                           const y = 200 - (val / chartMax) * 180;
+                          const titleText = enableMovingAverage
+                            ? `${s.label}: ${formatNumber(val)} (Média móvel ${movingAverageWindow}${groupBy === 'daily' ? 'd' : 'p'}) • Real: ${formatNumber(rawVal)} (${item.label || item.period})`
+                            : `${s.label}: ${formatNumber(val)} (${item.label || item.period})`;
+
                           return (
                             <circle
                               key={idx}
@@ -1142,7 +1305,7 @@ export default function LeadsDashboard() {
                               fill={s.color}
                               className="hover:r-5 transition-all cursor-pointer"
                             >
-                              <title>{`${s.label}: ${val} (${item.label || item.period})`}</title>
+                              <title>{titleText}</title>
                             </circle>
                           );
                         })}

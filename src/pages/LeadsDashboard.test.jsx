@@ -174,3 +174,54 @@ describe('LeadsDashboard — Origem das vendas (T3)', () => {
     );
   });
 });
+
+describe('LeadsDashboard — Média Móvel no Gráfico', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const timeSeriesMock = [
+    { period: '2026-10-01', label: '01/10', initiate_to_purchase_pct: 50, pageview_to_cart_pct: 20 },
+    { period: '2026-10-02', label: '02/10', initiate_to_purchase_pct: 100, pageview_to_cart_pct: 40 },
+    { period: '2026-10-03', label: '03/10', initiate_to_purchase_pct: 60, pageview_to_cart_pct: 30 },
+  ];
+
+  it('inicia com o checkbox de média móvel desmarcado e o ativa ao clicar', async () => {
+    const stats = statsCom(origemComVendas);
+    stats.time_series = timeSeriesMock;
+    mockApi(stats);
+
+    render(
+      <MemoryRouter>
+        <LeadsDashboard />
+      </MemoryRouter>,
+    );
+
+    const checkbox = await screen.findByRole('checkbox', { name: /Média Móvel/i });
+    expect(checkbox).not.toBeChecked();
+    expect(screen.queryByLabelText('Janela da média móvel')).not.toBeInTheDocument();
+    expect(screen.queryByText(/• Média Móvel/i)).not.toBeInTheDocument();
+
+    // Ativa o checkbox
+    await userEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+
+    // Seletor de janela aparece com 7 dias padrão
+    const select = screen.getByLabelText('Janela da média móvel');
+    expect(select).toBeInTheDocument();
+    expect(select).toHaveValue('7');
+    expect(screen.getByText(/• Média Móvel \(7 dias\)/i)).toBeInTheDocument();
+    expect(screen.getByText('Dados reais')).toBeInTheDocument();
+
+    // Troca para 14 dias
+    await userEvent.selectOptions(select, '14');
+    expect(select).toHaveValue('14');
+    expect(screen.getByText(/• Média Móvel \(14 dias\)/i)).toBeInTheDocument();
+
+    // Desmarca o checkbox
+    await userEvent.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    expect(screen.queryByLabelText('Janela da média móvel')).not.toBeInTheDocument();
+    expect(screen.queryByText(/• Média Móvel/i)).not.toBeInTheDocument();
+  });
+});
