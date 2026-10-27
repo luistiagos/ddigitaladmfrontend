@@ -22,7 +22,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import api from '@/services/api';
-import { todayISO } from '@/utils/format';
+import { todayISO, formatDate, formatUtcDateTime } from '@/utils/format';
 
 function formatNumber(num) {
   if (num == null) return '0';
@@ -251,6 +251,468 @@ function OrigemVendas({ origem, loading }) {
   );
 }
 
+// Onde o checkout perde a venda (docs/modules/telemetria/changes/2026-10-26-funil-do-checkout-por-pessoa-no-dashboard-de-leads/).
+// Fetch próprio em /admin/leads/checkout-funnel: a falha dele não derruba os blocos antigos.
+// Números só com `disponivel === true`; falha é "indisponível", nunca zero (EARS-21).
+const FUNIL_TRANSICOES = [
+  { id: 'abriu_contato', label: 'Abriu o checkout ➔ preencheu contato', unidade: 'registro do checkout', color: '#06b6d4', bgClass: 'bg-cyan-500' },
+  { id: 'contato_gerou', label: 'Preencheu contato ➔ gerou pagamento', unidade: 'registro com contato', color: '#f59e0b', bgClass: 'bg-amber-500' },
+  { id: 'gerou_pagou', label: 'Gerou pagamento ➔ pagou', unidade: 'pessoa', color: '#10b981', bgClass: 'bg-emerald-500' },
+];
+
+const FUNIL_MEIOS = [
+  { key: 'pix', label: 'PIX' },
+  { key: 'cartao', label: 'Cartão' },
+];
+
+const COLETA_ATRASADA_MS = 60 * 60 * 1000;
+
+function formatPp(dif) {
+  if (dif == null) return 'sem dados';
+  const s = Number(dif).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return `${dif > 0 ? '+' : ''}${s} pp`;
+}
+
+function LadoFunil({ lado, desde }) {
+  if (!lado || lado.cobertura === 'nenhuma') return <span className="text-gray-500">sem cobertura</span>;
+  if (lado.pct == null) return <span className="text-gray-500">sem dados</span>;
+  return (
+    <span>
+      <span className="font-bold text-gray-100">{formatPct(lado.pct)}</span>{' '}
+      <span className="text-gray-500">({formatNumber(lado.num)}/{formatNumber(lado.den)})</span>
+      {lado.aguardando > 0 && (
+        <span className="block text-[10px] text-gray-500">{formatNumber(lado.aguardando)} aguardando 24 h</span>
+      )}
+      {lado.cobertura === 'parcial' && (
+        <span className="block text-[10px] text-amber-400">cobertura só desde {formatDate(desde)}</span>
+      )}
+    </span>
+  );
+}
+
+function DifFunil({ dif }) {
+  const cor = dif == null ? 'text-gray-500' : dif < 0 ? 'text-red-400' : dif > 0 ? 'text-emerald-400' : 'text-gray-300';
+  return <span className={`font-bold whitespace-nowrap ${cor}`}>{formatPp(dif)}</span>;
+}
+
+function DetalheFunil({ titulo, linhas, rotulo, desde }) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{titulo}</div>
+      <table className="w-full text-xs">
+        <tbody>
+          {linhas.map((l) => (
+            <tr key={rotulo(l)} className="border-t border-gray-800">
+              <td className="py-1 pr-3 text-gray-300">{rotulo(l)}</td>
+              <td className="py-1 pr-3"><LadoFunil lado={l.periodo} desde={desde} /></td>
+              <td className="py-1 pr-3"><LadoFunil lado={l.base} desde={desde} /></td>
+              <td className="py-1"><DifFunil dif={l.dif_pp} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GraficoSemanalFunil({ serie, meio }) {
+  const valor = (semana, id) => (id === 'gerou_pagou' && meio ? semana.gerou_pagou_por_meio?.[meio] : semana[id]);
+  const x = (idx) => 50 + (idx / Math.max(1, serie.length - 1)) * 730;
+  const y = (pct) => 200 - (pct / 100) * 180;
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-[560px]">
+        <svg viewBox="0 0 800 250" className="w-full h-64 overflow-visible" role="img" aria-label="Taxa semanal por transição">
+          {[0, 25, 50, 75, 100].map((pct) => (
+            <g key={pct}>
+              <line x1="45" y1={y(pct)} x2="790" y2={y(pct)} stroke="#374151" strokeDasharray="3 3" strokeWidth="1" />
+              <text x="40" y={y(pct) + 3} fill="#9ca3af" fontSize="10" textAnchor="end">{pct}%</text>
+            </g>
+          ))}
+
+          {FUNIL_TRANSICOES.map((t) => (
+            <g key={t.id}>
+              {serie.map((semana, idx) => {
+                if (idx === 0) return null;
+                const a = valor(serie[idx - 1], t.id);
+                const b = valor(semana, t.id);
+                if (a?.pct == null || b?.pct == null) return null;
+                return (
+                  <line
+                    key={idx}
+                    x1={x(idx - 1)}
+                    y1={y(a.pct)}
+                    x2={x(idx)}
+                    y2={y(b.pct)}
+                    stroke={t.color}
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeDasharray={semana.parcial ? '5 4' : undefined}
+                  />
+                );
+              })}
+              {serie.map((semana, idx) => {
+                const v = valor(semana, t.id);
+                if (v?.pct == null) return null;
+                return (
+                  <circle
+                    key={idx}
+                    cx={x(idx)}
+                    cy={y(v.pct)}
+                    r="3.5"
+                    fill={semana.parcial ? '#1f2937' : t.color}
+                    stroke={t.color}
+                    strokeWidth="2"
+                    data-parcial={semana.parcial ? 'true' : 'false'}
+                  >
+                    <title>
+                      {`${t.label}: ${formatPct(v.pct)} (${formatNumber(v.num)}/${formatNumber(v.den)}) • ${semana.semana}${semana.parcial ? ' (parcial)' : ''}`}
+                    </title>
+                  </circle>
+                );
+              })}
+            </g>
+          ))}
+
+          {serie.map((semana, idx) => (
+            <g key={semana.semana}>
+              <text x={x(idx)} y="222" fill="#9ca3af" fontSize="10" textAnchor="middle">
+                {formatDate(semana.inicio).slice(0, 5)}
+              </text>
+              {semana.parcial && (
+                <text x={x(idx)} y="236" fill="#fbbf24" fontSize="10" textAnchor="middle">parcial</text>
+              )}
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function FunilCheckout({ startDate, endDate, storeId, stores, recarga }) {
+  const [estado, setEstado] = useState({ carregando: true });
+  const [baseInicio, setBaseInicio] = useState('');
+  const [baseFim, setBaseFim] = useState('');
+  const [aberta, setAberta] = useState(null);
+  const [meioGrafico, setMeioGrafico] = useState('');
+  // A base escolhida só vai ao backend com as duas datas; senão vale a padrão (4 janelas).
+  const baseEscolhida = baseInicio && baseFim ? `${baseInicio}|${baseFim}` : '';
+
+  useEffect(() => {
+    let ativo = true;
+    setEstado({ carregando: true });
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    if (storeId) params.set('store_id', storeId);
+    if (baseEscolhida) {
+      const [ini, fim] = baseEscolhida.split('|');
+      params.set('base_start', ini);
+      params.set('base_end', fim);
+    }
+    api.get(`/admin/leads/checkout-funnel?${params}`)
+      .then((res) => {
+        if (ativo) setEstado({ dados: res.data });
+      })
+      .catch((err) => {
+        if (!ativo) return;
+        const erro400 = err.response?.status === 400 ? err.response.data?.error : null;
+        setEstado({ erro: erro400 });
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [startDate, endDate, storeId, baseEscolhida, recarga]);
+
+  const nomeLoja = (id) => {
+    if (id == null) return 'Sem loja';
+    const loja = stores.find((s) => String(s.id) === String(id));
+    return loja ? loja.name : `Loja ${id}`;
+  };
+
+  const dados = estado.dados;
+  const disponivel = dados?.disponivel === true;
+
+  let corpo;
+  if (estado.carregando) {
+    corpo = <div className="py-6 text-center text-gray-500 text-sm">Carregando...</div>;
+  } else if (estado.erro) {
+    corpo = (
+      <div className="py-6 flex items-center justify-center gap-2 text-amber-300 text-sm">
+        <AlertCircle className="h-4 w-4" />
+        {estado.erro}
+      </div>
+    );
+  } else if (!disponivel) {
+    corpo = (
+      <div className="py-6 flex items-center justify-center gap-2 text-gray-400 text-sm">
+        <AlertCircle className="h-4 w-4 text-amber-400" />
+        Funil do checkout indisponível
+      </div>
+    );
+  } else {
+    const desde = dados.cobertura_mp_desde;
+    const ultima = dados.ultima_coleta_mp ? new Date(dados.ultima_coleta_mp) : null;
+    const atrasada = !ultima || Date.now() - ultima.getTime() > COLETA_ATRASADA_MS;
+    const porId = Object.fromEntries((dados.transicoes || []).map((t) => [t.id, t]));
+    const ret = dados.retentativas || {};
+    const combos = dados.combos || {};
+    const serie = dados.serie_semanal || [];
+
+    corpo = (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="text-gray-400">
+            Período <span className="text-gray-200 font-semibold">{formatDate(dados.periodo?.inicio)} a {formatDate(dados.periodo?.fim)}</span>
+            {' '}x base <span className="text-gray-200 font-semibold">{formatDate(dados.base?.inicio)} a {formatDate(dados.base?.fim)}</span>
+            {dados.base?.padrao && <span className="text-gray-500"> (as 4 janelas anteriores)</span>}
+          </div>
+          <div className={`flex items-center gap-1.5 ${atrasada ? 'text-amber-300' : 'text-gray-400'}`}>
+            <Clock className="h-3.5 w-3.5" />
+            {ultima ? (
+              <span>Última coleta do Mercado Pago: {formatUtcDateTime(dados.ultima_coleta_mp)}</span>
+            ) : (
+              <span>Nenhuma coleta do Mercado Pago registrada</span>
+            )}
+            {atrasada && <span className="font-semibold">• Coleta atrasada (mais de 1 hora)</span>}
+          </div>
+        </div>
+
+        {/* `relative`: sem ele o `sr-only` do cabeçalho (position: absolute) escapa da rolagem
+            da tabela e faz a página inteira rolar de lado no celular. */}
+        <div className="relative w-full overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="text-[11px] text-gray-400 uppercase tracking-wider text-left">
+                <th className="py-2 pr-3 font-semibold">Transição</th>
+                <th className="py-2 pr-3 font-semibold">Unidade</th>
+                <th className="py-2 pr-3 font-semibold">Período</th>
+                <th className="py-2 pr-3 font-semibold">Base</th>
+                <th className="py-2 pr-3 font-semibold">Diferença</th>
+                <th className="py-2 font-semibold"><span className="sr-only">Detalhe</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {FUNIL_TRANSICOES.map((meta) => {
+                const t = porId[meta.id];
+                if (!t) return null;
+                const expandida = aberta === meta.id;
+                return (
+                  <FragmentoTransicao
+                    key={meta.id}
+                    meta={meta}
+                    t={t}
+                    expandida={expandida}
+                    alternar={() => setAberta(expandida ? null : meta.id)}
+                    nomeLoja={nomeLoja}
+                    desde={desde}
+                  />
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Retentativas</div>
+            {['periodo', 'base'].map((lado) => {
+              const r = ret[lado];
+              return (
+                <div key={lado} className="flex items-center justify-between py-0.5">
+                  <span className="text-gray-400">{lado === 'periodo' ? 'Período' : 'Base'}</span>
+                  {!r || r.cobertura === 'nenhuma' ? (
+                    <span className="text-gray-500">sem cobertura</span>
+                  ) : (
+                    <span className="text-gray-200">
+                      <span className="font-bold">{formatNumber(r.pagou_depois)}</span> de {formatNumber(r.episodios)} pagaram depois
+                      {' '}• {formatNumber(r.valor_menor)} com valor menor
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+            <p className="text-[10px] text-gray-500 mt-1">
+              Episódios em que o primeiro pagamento não foi aprovado e um posterior foi; “valor menor” = pagou menos que o
+              primeiro (tirou o combo).
+            </p>
+          </div>
+          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Combos</div>
+            {['periodo', 'base'].map((lado) => (
+              <div key={lado} className="flex items-center justify-between py-0.5">
+                <span className="text-gray-400">{lado === 'periodo' ? 'Período' : 'Base'}</span>
+                <LadoFunil lado={combos[lado]} desde={desde} />
+              </div>
+            ))}
+            <p className="text-[10px] text-gray-500 mt-1">Pagamentos aprovados com mais de um produto, sobre os aprovados.</p>
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-gray-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+              Taxa semanal (semanas de segunda a domingo)
+            </div>
+            <div className="flex items-center gap-1.5 text-xs flex-wrap">
+              <span className="text-[11px] text-gray-400 mr-1">Gerou ➔ pagou:</span>
+              {[{ key: '', label: 'Todos os meios' }, ...FUNIL_MEIOS].map((m) => (
+                <button
+                  key={m.key || 'todos'}
+                  type="button"
+                  aria-pressed={meioGrafico === m.key}
+                  onClick={() => setMeioGrafico(m.key)}
+                  className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all ${
+                    meioGrafico === m.key
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'bg-gray-900/60 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700/60'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap text-[11px] text-gray-400">
+            {FUNIL_TRANSICOES.map((t) => (
+              <span key={t.id} className="flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full ${t.bgClass}`} />
+                {t.label}
+              </span>
+            ))}
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full border border-gray-400 inline-block" />
+              ponto vazado = semana parcial
+            </span>
+          </div>
+          {serie.length ? (
+            <GraficoSemanalFunil serie={serie} meio={meioGrafico} />
+          ) : (
+            <div className="py-6 text-center text-gray-500 text-sm">Sem semanas para mostrar.</div>
+          )}
+        </div>
+
+        <p className="text-[11px] text-gray-500 leading-relaxed border-t border-gray-800 pt-3">
+          As duas primeiras transições vêm do último status de cada registro do checkout, não da pessoa: a tabela de
+          leads guarda só o último status e a última data de cada registro, e uma abertura anônima conta uma vez por
+          navegador. “Gerou ➔ pagou” conta pessoas (mesmo e-mail, telefone ou pedido) por episódio de 24 h: pago se
+          algum pagamento foi aprovado em até 24 h do primeiro; episódios com menos de 24 h ficam fora da taxa, como
+          “aguardando”. As fontes não são a mesma população.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section
+      aria-labelledby="funil-checkout-titulo"
+      className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg"
+    >
+      <div className="mb-4 flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+        <div>
+          <h2 id="funil-checkout-titulo" className="text-base font-bold text-white flex items-center gap-2">
+            <Activity className="h-5 w-5 text-violet-400" />
+            Onde o checkout perde a venda
+          </h2>
+          <p className="text-xs text-gray-400 mt-0.5">Taxa de cada etapa do checkout no período contra a base</p>
+        </div>
+        <div className="flex items-end gap-2 text-xs flex-wrap">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Base de</span>
+            <input
+              type="date"
+              aria-label="Início da base"
+              value={baseInicio}
+              onChange={(e) => setBaseInicio(e.target.value)}
+              className="bg-gray-900 border border-gray-700 text-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">até</span>
+            <input
+              type="date"
+              aria-label="Fim da base"
+              value={baseFim}
+              onChange={(e) => setBaseFim(e.target.value)}
+              className="bg-gray-900 border border-gray-700 text-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500"
+            />
+          </label>
+          {(baseInicio || baseFim) && (
+            <button
+              type="button"
+              onClick={() => {
+                setBaseInicio('');
+                setBaseFim('');
+              }}
+              className="text-[11px] text-violet-400 hover:text-violet-300 underline pb-1.5"
+            >
+              Usar a base padrão
+            </button>
+          )}
+        </div>
+      </div>
+      {corpo}
+    </section>
+  );
+}
+
+function FragmentoTransicao({ meta, t, expandida, alternar, nomeLoja, desde }) {
+  return (
+    <>
+      <tr className="border-t border-gray-700/60 align-top">
+        <td className="py-2 pr-3 text-gray-200 font-medium">
+          <span className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${meta.bgClass}`} />
+            {meta.label}
+          </span>
+        </td>
+        <td className="py-2 pr-3 text-xs text-gray-400">{meta.unidade}</td>
+        <td className="py-2 pr-3 text-xs"><LadoFunil lado={t.periodo} desde={desde} /></td>
+        <td className="py-2 pr-3 text-xs"><LadoFunil lado={t.base} desde={desde} /></td>
+        <td className="py-2 pr-3 text-xs"><DifFunil dif={t.dif_pp} /></td>
+        <td className="py-2 text-right">
+          <button
+            type="button"
+            aria-expanded={expandida}
+            aria-label={`Detalhe de ${meta.label}`}
+            onClick={alternar}
+            className="text-[11px] text-violet-400 hover:text-violet-300 underline whitespace-nowrap"
+          >
+            {expandida ? 'Fechar' : 'Detalhe'}
+          </button>
+        </td>
+      </tr>
+      {expandida && (
+        <tr>
+          <td colSpan={6} className="pb-3">
+            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3 space-y-3">
+              <DetalheFunil
+                titulo="Por loja"
+                linhas={t.por_loja || []}
+                rotulo={(l) => nomeLoja(l.store_id)}
+                desde={desde}
+              />
+              {t.por_meio && (
+                <>
+                  <DetalheFunil
+                    titulo="Por meio"
+                    linhas={t.por_meio}
+                    rotulo={(l) => FUNIL_MEIOS.find((m) => m.key === l.meio)?.label || l.meio}
+                    desde={desde}
+                  />
+                  <p className="text-[10px] text-gray-500">
+                    Uma pessoa que gerou PIX e cartão no mesmo episódio aparece nos dois; os meios não somam o total.
+                  </p>
+                </>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 export default function LeadsDashboard() {
   const [preset, setPreset] = useState('this_month');
   const [startDate, setStartDate] = useState(() => getPresetDates('this_month').start);
@@ -261,6 +723,8 @@ export default function LeadsDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // "Atualizar" também recarrega o bloco do funil do checkout, que tem fetch próprio.
+  const [recargaFunil, setRecargaFunil] = useState(0);
 
   // Chart view mode: 'rates' (Taxas de Conversão %) | 'volumes' (Volume dos Estágios)
   const [chartTab, setChartTab] = useState('rates');
@@ -540,7 +1004,10 @@ export default function LeadsDashboard() {
             Ver Tabela de Leads
           </Link>
           <button
-            onClick={fetchStats}
+            onClick={() => {
+              fetchStats();
+              setRecargaFunil((n) => n + 1);
+            }}
             disabled={loading}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
           >
@@ -956,6 +1423,14 @@ export default function LeadsDashboard() {
       </div>
 
       <OrigemVendas origem={stats?.origem_vendas} loading={loading} />
+
+      <FunilCheckout
+        startDate={startDate}
+        endDate={endDate}
+        storeId={selectedStoreId}
+        stores={stores}
+        recarga={recargaFunil}
+      />
 
       {/* Time Series Evolution Chart */}
       <div className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg space-y-4">
