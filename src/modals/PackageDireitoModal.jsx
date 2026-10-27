@@ -51,6 +51,10 @@ function alternar(lista, valor) {
   return lista.includes(valor) ? lista.filter(v => v !== valor) : [...lista, valor];
 }
 
+function somar(lista, novos) {
+  return [...lista, ...novos.filter(v => !lista.includes(v))];
+}
+
 function erroDaResposta(e, padrao) {
   return e?.response?.data?.error || padrao;
 }
@@ -243,6 +247,16 @@ export default function PackageDireitoModal({ pacote, onClose, onChanged }) {
                 )}
 
                 <fieldset disabled={form.sem_conteudo} className={`space-y-5 ${form.sem_conteudo ? 'opacity-50' : ''}`}>
+                  <CopiarDeOutro
+                    pacoteId={pacote.id}
+                    onCopiar={c => setForm(f => ({
+                      ...f,
+                      sistemas: somar(f.sistemas, c.sistemas),
+                      fatias: somar(f.fatias, c.fatias),
+                      incluidos: somar(f.incluidos, c.incluidos),
+                    }))}
+                  />
+
                   <Sistemas
                     cadastro={cadastro}
                     vocab={vocab}
@@ -432,12 +446,12 @@ function Sistemas({ cadastro, vocab, marcados, filtro, onFiltro, onToggle }) {
   );
 }
 
-function Incluidos({ pacoteId, incluidos, onAdd, onRemove }) {
+/** Busca de pacote por titulo ou id, a mesma para incluir e para copiar (EARS-33). */
+function BuscaDePacote({ excluir, placeholder, rotuloBotao, acao, ariaAcao, onEscolher, vazio }) {
   const [busca, setBusca] = useState('');
   const [resultados, setResultados] = useState(null);
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState('');
-  const [titulos, setTitulos] = useState({});
 
   async function buscar(e) {
     e?.preventDefault();
@@ -461,13 +475,63 @@ function Incluidos({ pacoteId, incluidos, onAdd, onRemove }) {
     }
   }
 
+  const candidatos = (resultados || []).filter(r => !excluir(r.id));
+
+  return (
+    <>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') buscar(e); }}
+          placeholder={placeholder}
+          className="flex-1 bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+        />
+        <button
+          type="button"
+          onClick={buscar}
+          disabled={buscando}
+          aria-label={rotuloBotao}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors disabled:opacity-50"
+        >
+          {buscando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />} Buscar
+        </button>
+      </div>
+      {erro && <ErrorBox>{erro}</ErrorBox>}
+      {resultados && candidatos.length === 0 && (
+        <p className="text-xs text-gray-500">{vazio}</p>
+      )}
+      {candidatos.length > 0 && (
+        <ul className="space-y-1">
+          {candidatos.map(r => (
+            <li key={r.id} className="flex items-center justify-between gap-2 text-sm text-gray-300">
+              <span className="truncate">#{r.id}{r.title ? ` ${r.title}` : ''}</span>
+              <button
+                type="button"
+                aria-label={`${ariaAcao} ${r.id}`}
+                onClick={() => onEscolher(r)}
+                className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 shrink-0"
+              >
+                <Plus className="h-3 w-3" /> {acao}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function Incluidos({ pacoteId, incluidos, onAdd, onRemove }) {
+  const [titulos, setTitulos] = useState({});
+
   function incluir(item) {
     if (item.title) setTitulos(t => ({ ...t, [item.id]: item.title }));
     onAdd(item.id);
   }
 
   const ordenados = [...incluidos].sort((a, b) => a - b);
-  const candidatos = (resultados || []).filter(r => r.id !== pacoteId && !incluidos.includes(r.id));
 
   return (
     <Bloco titulo="Pacotes incluídos (quem tem este pacote ganha também estes)">
@@ -485,45 +549,76 @@ function Incluidos({ pacoteId, incluidos, onAdd, onRemove }) {
           ))}
         </ul>
       )}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={busca}
-          onChange={e => setBusca(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') buscar(e); }}
-          placeholder="Buscar pacote por título ou id..."
-          className="flex-1 bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500 placeholder-gray-500"
-        />
-        <button
-          type="button"
-          onClick={buscar}
-          disabled={buscando}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors disabled:opacity-50"
-        >
-          {buscando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />} Buscar
-        </button>
-      </div>
+      <BuscaDePacote
+        excluir={id => id === pacoteId || incluidos.includes(id)}
+        placeholder="Buscar pacote por título ou id..."
+        acao="Incluir"
+        ariaAcao="incluir"
+        vazio="Nenhum pacote para incluir."
+        onEscolher={incluir}
+      />
+    </Bloco>
+  );
+}
+
+/** Copia o cadastro direto de outro pacote para o formulario, somado ao que ja esta marcado
+ * (EARS-33). Nao grava: so "Salvar cadastro" grava, e reduzir continua passando pelo 409. */
+function CopiarDeOutro({ pacoteId, onCopiar }) {
+  const [copiando, setCopiando] = useState(false);
+  const [aviso, setAviso] = useState('');
+  const [erro, setErro] = useState('');
+
+  async function copiar(item) {
+    setCopiando(true);
+    setAviso('');
+    setErro('');
+    const origem = `#${item.id}${item.title ? ` ${item.title}` : ''}`;
+    try {
+      const res = await api.get(`/admin/items/${item.id}/direito`);
+      const c = res.data.cadastro;
+      if (!c.configurado || c.sem_conteudo) {
+        setAviso(`${origem} não tem vínculos para copiar.`);
+        return;
+      }
+      // Sistema fora do repositorio faria o servidor recusar o cadastro inteiro (EARS-4), e o
+      // proprio pacote nao pode se incluir (EARS-9).
+      const sistemas = c.sistemas.filter(s => s.no_repositorio !== false).map(s => s.mnemonico);
+      const fora = c.sistemas.filter(s => s.no_repositorio === false).map(s => s.mnemonico);
+      const incluidos = c.incluidos.filter(id => id !== pacoteId);
+      onCopiar({ sistemas, fatias: [...c.fatias], incluidos });
+      const naoCopiados = [
+        ...fora.map(m => `${m} (fora do repositório)`),
+        ...(c.incluidos.includes(pacoteId) ? [`#${pacoteId} (o próprio pacote)`] : []),
+      ];
+      setAviso(`Copiado de ${origem}: ${plural(sistemas.length, 'sistema', 'sistemas')}, `
+        + `${plural(c.fatias.length, 'fatia', 'fatias')} e ${plural(incluidos.length, 'incluído', 'incluídos')}, `
+        + 'somados ao que já estava marcado. Salve para gravar.'
+        + (naoCopiados.length > 0 ? ` Não copiados: ${naoCopiados.join(', ')}.` : ''));
+    } catch (e) {
+      setErro(erroDaResposta(e, `Erro ao ler o cadastro de ${origem}.`));
+    } finally {
+      setCopiando(false);
+    }
+  }
+
+  return (
+    <Bloco titulo="Copiar de outro pacote (marca os vínculos dele somados aos daqui; só grava ao salvar)">
+      <BuscaDePacote
+        excluir={id => id === pacoteId}
+        placeholder="Copiar de: título ou id do pacote..."
+        rotuloBotao="Procurar pacote de origem"
+        acao="Copiar"
+        ariaAcao="copiar de"
+        vazio="Nenhum outro pacote com esse termo."
+        onEscolher={copiar}
+      />
+      {copiando && (
+        <p className="flex items-center gap-2 text-xs text-gray-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Lendo o cadastro…
+        </p>
+      )}
+      {aviso && <p className="text-xs text-green-400">{aviso}</p>}
       {erro && <ErrorBox>{erro}</ErrorBox>}
-      {resultados && candidatos.length === 0 && (
-        <p className="text-xs text-gray-500">Nenhum pacote para incluir.</p>
-      )}
-      {candidatos.length > 0 && (
-        <ul className="space-y-1">
-          {candidatos.map(r => (
-            <li key={r.id} className="flex items-center justify-between gap-2 text-sm text-gray-300">
-              <span className="truncate">#{r.id}{r.title ? ` ${r.title}` : ''}</span>
-              <button
-                type="button"
-                aria-label={`incluir ${r.id}`}
-                onClick={() => incluir(r)}
-                className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 shrink-0"
-              >
-                <Plus className="h-3 w-3" /> Incluir
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </Bloco>
   );
 }

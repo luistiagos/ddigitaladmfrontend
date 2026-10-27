@@ -297,6 +297,54 @@ describe('Products: cadastro de direito', () => {
     });
   });
 
+  it('copiar_cadastro_de_outro_pacote', async () => {
+    // EARS-33: soma ao que esta marcado, nao copia sistema fora do repositorio nem a inclusao do
+    // proprio pacote, e nada vai ao servidor antes de "Salvar cadastro".
+    const destino = cadastro(14, { sistemas: marcados(['snes']) });
+    const origem = cadastro(21000, {
+      sistemas: marcados(['n64', 'psx', 'gba']), fatias: ['mods-ptbr'], incluidos: [300, 14],
+    });
+    api.get.mockImplementation(async (url) => {
+      if (url === '/admin/items') {
+        return { data: { items: [item(14, { estado: 'configurado', sistemas: 1, incluidos: 0 })], total: 1 } };
+      }
+      if (url === '/admin/items/14/direito') return { data: respostaDireito(destino) };
+      if (url === '/admin/items/21000/direito') return { data: respostaDireito(origem) };
+      if (url.startsWith('/admin/items?')) {
+        return { data: { items: [{ id: 14, title: 'Pacote 14' }, { id: 21000, title: 'Multigames + Switch' }] } };
+      }
+      throw new Error(`GET inesperado: ${url}`);
+    });
+    api.put.mockResolvedValueOnce({ data: { cadastro: destino } });
+    render(<Products />);
+
+    const dialogo = await abrirCadastro(14);
+    await within(dialogo).findByRole('checkbox', { name: /^snes/ });
+    await userEvent.type(within(dialogo).getByPlaceholderText(/copiar de/i), 'Multi');
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Procurar pacote de origem' }));
+    // O proprio pacote nao aparece como origem.
+    expect(within(dialogo).queryByRole('button', { name: 'copiar de 14' })).toBeNull();
+    await userEvent.click(await within(dialogo).findByRole('button', { name: 'copiar de 21000' }));
+
+    expect(await within(dialogo).findByText(/Não copiados: gba \(fora do repositório\), #14 \(o próprio pacote\)/))
+      .toBeInTheDocument();
+    for (const m of ['snes', 'n64', 'psx']) {
+      expect(within(dialogo).getByRole('checkbox', { name: new RegExp(`^${m}`) })).toBeChecked();
+    }
+    expect(within(dialogo).getByRole('checkbox', { name: 'mods-ptbr' })).toBeChecked();
+    expect(within(dialogo).getByRole('listitem', { name: 'incluido 300' })).toBeInTheDocument();
+    expect(within(dialogo).queryByRole('listitem', { name: 'incluido 14' })).toBeNull();
+    expect(api.put).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Salvar cadastro' }));
+    await waitFor(() => {
+      expect(api.put).toHaveBeenCalledWith('/admin/items/14/direito', {
+        sem_conteudo: false, sistemas: ['snes', 'n64', 'psx'], fatias: ['mods-ptbr'], incluidos: [300],
+        confirmar_reducao: false,
+      });
+    });
+  });
+
   it('sem conteudo manda as listas vazias', async () => {
     const c = cadastro(15, { configurado: false, atualizado_em: null, atualizado_por: null });
     dublarApi({
