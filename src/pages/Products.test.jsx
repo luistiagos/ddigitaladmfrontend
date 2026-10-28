@@ -297,6 +297,19 @@ describe('Products: cadastro de direito', () => {
     });
   });
 
+  it('bloco de fatias nao aparece quando o vocabulario de fatias e vazio', async () => {
+    const cad = cadastro(14, { sistemas: marcados(['snes']), fatias: [] });
+    dublarApi({
+      itens: [item(14, { estado: 'configurado', sistemas: 1, incluidos: 0 })],
+      direitos: [respostaDireito(cad, { fatias: [] })],
+    });
+    render(<Products />);
+
+    const dialogo = await abrirCadastro(14);
+    expect(within(dialogo).queryByText('Fatias')).toBeNull();
+    expect(within(dialogo).queryByRole('checkbox', { name: 'mods-ptbr' })).toBeNull();
+  });
+
   it('copiar_cadastro_de_outro_pacote', async () => {
     // EARS-33: soma ao que esta marcado, nao copia sistema fora do repositorio nem a inclusao do
     // proprio pacote, e nada vai ao servidor antes de "Salvar cadastro".

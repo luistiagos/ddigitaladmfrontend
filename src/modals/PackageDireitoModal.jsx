@@ -266,20 +266,22 @@ export default function PackageDireitoModal({ pacote, onClose, onChanged }) {
                     onToggle={m => setForm(f => ({ ...f, sistemas: alternar(f.sistemas, m) }))}
                   />
 
-                  <Bloco titulo="Fatias">
-                    <div className="flex flex-wrap gap-4">
-                      {(data.fatias || []).map(fatia => (
-                        <label key={fatia} className="flex items-center gap-2 text-sm text-gray-200">
-                          <input
-                            type="checkbox"
-                            checked={form.fatias.includes(fatia)}
-                            onChange={() => setForm(f => ({ ...f, fatias: alternar(f.fatias, fatia) }))}
-                          />
-                          {fatia}
-                        </label>
-                      ))}
-                    </div>
-                  </Bloco>
+                  {(data.fatias || []).length > 0 && (
+                    <Bloco titulo="Fatias">
+                      <div className="flex flex-wrap gap-4">
+                        {data.fatias.map(fatia => (
+                          <label key={fatia} className="flex items-center gap-2 text-sm text-gray-200">
+                            <input
+                              type="checkbox"
+                              checked={form.fatias.includes(fatia)}
+                              onChange={() => setForm(f => ({ ...f, fatias: alternar(f.fatias, fatia) }))}
+                            />
+                            {fatia}
+                          </label>
+                        ))}
+                      </div>
+                    </Bloco>
+                  )}
 
                   <Incluidos
                     pacoteId={pacote.id}
