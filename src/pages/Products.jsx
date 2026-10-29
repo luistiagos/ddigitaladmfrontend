@@ -219,9 +219,7 @@ export default function Products() {
               <li
                 key={p.id}
                 aria-label={`produto ${p.id}`}
-                className={`bg-gray-800 border rounded-xl overflow-hidden flex flex-col ${
-                  aVendaSemCadastro(p.direito) ? 'border-red-500/60 ring-1 ring-red-500/30' : 'border-gray-700'
-                }`}
+                className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden flex flex-col"
               >
                 {/* Image */}
                 <ProductImage image={p.image} title={p.title} />
@@ -467,10 +465,6 @@ export default function Products() {
 
 // Estado do cadastro de direito na lista (EARS-12). `direito: null` = a consulta do estado falhou
 // no backend: mostra "?" e o produto continua na lista.
-function aVendaSemCadastro(direito) {
-  return !!direito && direito.estado === 'nao_configurado' && direito.a_venda_em_loja_ligada;
-}
-
 function SeloDoDireito({ direito }) {
   if (!direito) {
     return (
@@ -480,12 +474,7 @@ function SeloDoDireito({ direito }) {
     );
   }
   const selo = seloDoCadastro(direito);
-  return (
-    <>
-      <Badge variant={selo.variant}>{selo.label}</Badge>
-      {aVendaSemCadastro(direito) && <Badge variant="red">à venda em loja ligada sem cadastro</Badge>}
-    </>
-  );
+  return <Badge variant={selo.variant}>{selo.label}</Badge>;
 }
 
 function ProductImage({ image, title }) {

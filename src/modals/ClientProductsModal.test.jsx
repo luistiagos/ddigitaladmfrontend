@@ -139,22 +139,11 @@ describe('ClientProductsModal: direito na ficha', () => {
     expect(screen.getByRole('button', { name: /tentar de novo/i })).toBeInTheDocument();
   });
 
-  it('lista vazia assinada e em configuracao sao estados diferentes', async () => {
+  it('conta sem pacotes no direito mostra sem direito (lista vazia assinada)', async () => {
     dublarApi({ direitos: [direito([], { systems: [] })] });
-    const { unmount } = renderModal();
+    renderModal();
     expect(await screen.findByText('sem direito')).toBeInTheDocument();
     expect(screen.getByText(/lista vazia assinada/)).toBeInTheDocument();
-    unmount();
-
-    dublarApi({
-      direitos: [direito(
-        [pacote(200, [{ tipo: 'compra', transacao_id: 9 }], { situacao: 'em_preparacao' })],
-        { estado: 'em_configuracao', systems: [], em_preparacao: [{ id: 200, titulo: 'Pacote 200' }] },
-      )],
-    });
-    renderModal();
-    expect(await screen.findByText('em configuração')).toBeInTheDocument();
-    expect(screen.getByText(/^Em preparação:/).closest('p')).toHaveTextContent('Pacote 200 (#200)');
   });
 
   it('brinde concede sem loja e rele o direito', async () => {

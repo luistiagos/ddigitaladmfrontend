@@ -120,8 +120,6 @@ export default function ClientProductsModal({ client, onClose }) {
 
 const SITUACAO = {
   configurado: { label: 'configurado', variant: 'green' },
-  sem_conteudo: { label: 'sem conteúdo', variant: 'blue' },
-  em_preparacao: { label: 'em preparação', variant: 'yellow' },
   ignorado: { label: 'legado sem cadastro (ignorado)', variant: 'gray' },
 };
 
@@ -151,9 +149,6 @@ function EstadoDoDireito({ direito }) {
   if (!direito.ativo) {
     badge = <Badge variant="red">conta desativada</Badge>;
     texto = 'O app recebe lista vazia.';
-  } else if (direito.estado === 'em_configuracao') {
-    badge = <Badge variant="yellow">em configuração</Badge>;
-    texto = 'Nenhum pacote do direito tem cadastro: o app mostra "em preparação".';
   } else if (noDireito.length === 0) {
     badge = <Badge variant="gray">sem direito</Badge>;
     texto = 'O app recebe lista vazia assinada.';
@@ -169,9 +164,6 @@ function EstadoDoDireito({ direito }) {
       </div>
       <Lista rotulo="Sistemas" valores={direito.systems} />
       <Lista rotulo="Fatias" valores={direito.slices} />
-      {(direito.em_preparacao || []).length > 0 && (
-        <Lista rotulo="Em preparação" valores={direito.em_preparacao.map(e => `${e.titulo} (#${e.id})`)} />
-      )}
     </div>
   );
 }

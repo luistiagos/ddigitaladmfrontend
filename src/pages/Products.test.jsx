@@ -86,36 +86,26 @@ describe('Products: lista', () => {
   it('estado_do_cadastro_por_pacote', async () => {
     dublarApi({
       itens: [
-        item(1, { estado: 'nao_configurado', sistemas: 0, incluidos: 0, a_venda_em_loja_ligada: true }),
-        item(2, { estado: 'nao_configurado', sistemas: 0, incluidos: 0, a_venda_em_loja_ligada: false }),
-        item(3, { estado: 'sem_conteudo', sistemas: 0, incluidos: 0, a_venda_em_loja_ligada: true }),
-        item(4, { estado: 'configurado', sistemas: 5, incluidos: 2, a_venda_em_loja_ligada: true }),
-        item(5, null),
+        item(1, { estado: 'nao_configurado', sistemas: 0, incluidos: 0 }),
+        item(2, { estado: 'sem_conteudo', sistemas: 0, incluidos: 0 }),
+        item(3, { estado: 'configurado', sistemas: 5, incluidos: 2 }),
+        item(4, null),
       ],
     });
     render(<Products />);
 
-    const aVenda = await screen.findByRole('listitem', { name: 'produto 1' });
-    expect(within(aVenda).getByText('não configurado')).toBeInTheDocument();
-    expect(within(aVenda).getByText('à venda em loja ligada sem cadastro')).toBeInTheDocument();
-    expect(aVenda.className).toMatch(/border-red-500/);
+    const naoConfigurado = await screen.findByRole('listitem', { name: 'produto 1' });
+    expect(within(naoConfigurado).getByText('não configurado')).toBeInTheDocument();
 
-    const foraDaVenda = screen.getByRole('listitem', { name: 'produto 2' });
-    expect(within(foraDaVenda).getByText('não configurado')).toBeInTheDocument();
-    expect(within(foraDaVenda).queryByText(/à venda em loja ligada/)).toBeNull();
-    expect(foraDaVenda.className).not.toMatch(/border-red-500/);
-
-    const semConteudo = screen.getByRole('listitem', { name: 'produto 3' });
+    const semConteudo = screen.getByRole('listitem', { name: 'produto 2' });
     expect(within(semConteudo).getByText('sem conteúdo de app')).toBeInTheDocument();
-    expect(within(semConteudo).queryByText(/à venda em loja ligada/)).toBeNull();
 
-    const configurado = screen.getByRole('listitem', { name: 'produto 4' });
+    const configurado = screen.getByRole('listitem', { name: 'produto 3' });
     expect(within(configurado).getByText('5 sistemas · 2 incluídos')).toBeInTheDocument();
-    expect(within(configurado).queryByText(/à venda em loja ligada/)).toBeNull();
 
     // Falha do estado no backend: "?" e o produto continua na lista.
-    const semEstado = screen.getByRole('listitem', { name: 'produto 5' });
-    expect(within(semEstado).getByText('Pacote 5')).toBeInTheDocument();
+    const semEstado = screen.getByRole('listitem', { name: 'produto 4' });
+    expect(within(semEstado).getByText('Pacote 4')).toBeInTheDocument();
     expect(within(semEstado).getByText('direito: ?')).toBeInTheDocument();
   });
 
