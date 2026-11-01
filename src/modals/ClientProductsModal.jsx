@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   X, Loader2, Store, Package, Plus, Trash2, ChevronLeft,
   CheckCircle2, Circle, ShoppingBag, LinkIcon, Unlink,
-  ShieldCheck, Smartphone, Gift, Search, RefreshCw
+  ShieldCheck, Smartphone, Gift, Search, RefreshCw,
+  Edit2, RotateCcw
 } from 'lucide-react';
 import api from '@/services/api';
 import Badge from '@/components/ui/Badge';
@@ -142,14 +143,14 @@ function rotuloOrigem(o) {
   }
 }
 
-function EstadoDoDireito({ direito }) {
+function EstadoDoDireito({ direito, onEditSystems, onResetSystems, resettingSystems }) {
   const noDireito = (direito.pacotes || []).filter(p => p.no_direito);
   let badge;
   let texto;
   if (!direito.ativo) {
     badge = <Badge variant="red">conta desativada</Badge>;
     texto = 'O app recebe lista vazia.';
-  } else if (noDireito.length === 0) {
+  } else if (noDireito.length === 0 && (!direito.customizado || (direito.systems || []).length === 0)) {
     badge = <Badge variant="gray">sem direito</Badge>;
     texto = 'O app recebe lista vazia assinada.';
   } else {
@@ -160,9 +161,32 @@ function EstadoDoDireito({ direito }) {
     <div className="space-y-2 text-sm">
       <div className="flex items-center gap-2 flex-wrap">
         {badge}
+        {direito.customizado && <Badge variant="violet">personalizado</Badge>}
         {texto && <span className="text-gray-400">{texto}</span>}
       </div>
-      <Lista rotulo="Sistemas" valores={direito.systems} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <Lista rotulo="Sistemas" valores={direito.systems} />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={onEditSystems}
+            className="inline-flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+          >
+            <Edit2 className="h-3 w-3" /> Editar sistemas
+          </button>
+          {direito.customizado && (
+            <button
+              onClick={onResetSystems}
+              disabled={resettingSystems}
+              className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+              title="Restaurar sistemas originais dos pacotes"
+            >
+              <RotateCcw className="h-3 w-3" /> Restaurar padrões
+            </button>
+          )}
+        </div>
+      </div>
       <Lista rotulo="Fatias" valores={direito.slices} />
     </div>
   );
@@ -177,6 +201,157 @@ function Lista({ rotulo, valores }) {
   );
 }
 
+function ClientSystemsEditor({ client, direito, onSaved, onCancel }) {
+  const [vocab, setVocab] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState(direito.systems || []);
+  const [filtro, setFiltro] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const fetchSystems = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get(`/admin/clients/${client.id}/sistemas`);
+      setVocab(res.data.vocabulario || []);
+      setSelected(res.data.systems || []);
+      if (res.data.vocabulario_erro) {
+        setError(res.data.vocabulario_erro);
+      }
+    } catch (e) {
+      setError(erroDaResposta(e, 'Erro ao carregar vocabulário de sistemas.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [client.id]);
+
+  useEffect(() => {
+    fetchSystems();
+  }, [fetchSystems]);
+
+  function toggleSystem(m) {
+    setSelected(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError('');
+    try {
+      await api.put(`/admin/clients/${client.id}/systems`, { systems: selected });
+      onSaved?.('Sistemas atualizados com sucesso.');
+    } catch (e) {
+      setSaveError(erroDaResposta(e, 'Erro ao salvar sistemas do cliente.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const baseSet = new Set(direito.systems_base || []);
+  const customizados = direito.sistemas_customizados || { adicionados: [], removidos: [] };
+  const addSet = new Set(customizados.adicionados || []);
+  const remSet = new Set(customizados.removidos || []);
+
+  const termo = filtro.trim().toLowerCase();
+  const visiveis = (vocab || []).filter(v =>
+    !termo || v.mnemonico.toLowerCase().includes(termo) || (v.console || '').toLowerCase().includes(termo)
+  );
+
+  return (
+    <div className="p-4 rounded-xl border border-gray-700/60 bg-gray-800/40 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-semibold text-gray-200 uppercase tracking-wider">
+          Editar sistemas com acesso ({selected.length} selecionados)
+        </h4>
+        <button
+          onClick={onCancel}
+          className="text-xs text-gray-400 hover:text-white transition-colors"
+        >
+          Cancelar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
+          <Spinner /> Carregando vocabulário de sistemas…
+        </div>
+      ) : (
+        <>
+          {error && <ErrorBox>{error}</ErrorBox>}
+          {saveError && <ErrorBox>{saveError}</ErrorBox>}
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
+            <input
+              type="text"
+              aria-label="Filtrar sistemas"
+              value={filtro}
+              onChange={e => setFiltro(e.target.value)}
+              placeholder="Filtrar sistemas pelo nome ou console..."
+              className="w-full bg-gray-700/50 border border-gray-600 text-white text-sm rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:border-violet-500 placeholder-gray-500"
+            />
+          </div>
+
+          <div
+            aria-label="Lista de sistemas para marcar"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 max-h-56 overflow-y-auto pr-1 border border-gray-700/40 rounded-lg p-2 bg-gray-900/30"
+          >
+            {visiveis.map(v => {
+              const isChecked = selected.includes(v.mnemonico);
+              const isBase = baseSet.has(v.mnemonico);
+              const isAdded = addSet.has(v.mnemonico);
+              const isRemoved = remSet.has(v.mnemonico);
+              return (
+                <label
+                  key={v.mnemonico}
+                  className="flex items-center gap-2 text-xs text-gray-200 hover:bg-gray-700/30 p-1 rounded cursor-pointer min-w-0"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleSystem(v.mnemonico)}
+                    className="rounded border-gray-600 text-violet-600 focus:ring-violet-500"
+                  />
+                  <span className="truncate flex-1 font-mono text-gray-300">{v.mnemonico}</span>
+                  <span className="truncate text-gray-500 text-[11px]">{v.console || '?'}</span>
+                  {isAdded && <Badge variant="green" className="text-[10px] py-0 px-1 shrink-0">adicionado</Badge>}
+                  {isRemoved && <Badge variant="red" className="text-[10px] py-0 px-1 shrink-0">removido</Badge>}
+                  {!isAdded && !isRemoved && isBase && (
+                    <span className="text-[10px] text-gray-500 shrink-0">pacote</span>
+                  )}
+                </label>
+              );
+            })}
+            {visiveis.length === 0 && (
+              <p className="text-xs text-gray-500 col-span-2 py-2 text-center">
+                Nenhum sistema encontrado com este filtro.
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              onClick={onCancel}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors disabled:opacity-50"
+            >
+              {saving && <Spinner />} Salvar sistemas
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function DireitoSection({ client }) {
   const [direito, setDireito] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -184,6 +359,10 @@ function DireitoSection({ client }) {
   const [toRevoke, setToRevoke] = useState(null);
   const [revoking, setRevoking] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [editingSystems, setEditingSystems] = useState(false);
+  const [resettingSystems, setResettingSystems] = useState(false);
+  const [confirmResetSystems, setConfirmResetSystems] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
 
   const fetchDireito = useCallback(async () => {
     setLoading(true);
@@ -201,6 +380,22 @@ function DireitoSection({ client }) {
   }, [client.id]);
 
   useEffect(() => { fetchDireito(); }, [fetchDireito]);
+
+  async function handleResetSystems() {
+    setResettingSystems(true);
+    setActionError('');
+    setConfirmResetSystems(false);
+    try {
+      await api.delete(`/admin/clients/${client.id}/systems`);
+      setSuccessMsg('Sistemas restaurados aos padrões dos pacotes.');
+      setEditingSystems(false);
+      await fetchDireito();
+    } catch (e) {
+      setActionError(erroDaResposta(e, 'Erro ao restaurar sistemas.'));
+    } finally {
+      setResettingSystems(false);
+    }
+  }
 
   async function confirmRevoke() {
     setRevoking(true);
@@ -248,7 +443,30 @@ function DireitoSection({ client }) {
       ) : (
         <>
           {actionError && <ErrorBox>{actionError}</ErrorBox>}
-          <EstadoDoDireito direito={direito} />
+          {successMsg && (
+            <div className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-2">
+              {successMsg}
+            </div>
+          )}
+          <EstadoDoDireito
+            direito={direito}
+            onEditSystems={() => setEditingSystems(v => !v)}
+            onResetSystems={() => setConfirmResetSystems(true)}
+            resettingSystems={resettingSystems}
+          />
+
+          {editingSystems && (
+            <ClientSystemsEditor
+              client={client}
+              direito={direito}
+              onSaved={async (msg) => {
+                setSuccessMsg(msg);
+                setEditingSystems(false);
+                await fetchDireito();
+              }}
+              onCancel={() => setEditingSystems(false)}
+            />
+          )}
 
           {direito.pacotes.length === 0 ? (
             <p className="text-sm text-gray-500">Nenhum pacote: sem concessão, compra aprovada ou revogação.</p>
@@ -274,6 +492,18 @@ function DireitoSection({ client }) {
           loading={revoking}
           onConfirm={confirmRevoke}
           onCancel={() => setToRevoke(null)}
+        />
+      )}
+
+      {confirmResetSystems && (
+        <ConfirmModal
+          title="Restaurar padrões de sistemas"
+          message={`Restaurar os sistemas de ${client.email} aos originais concedidos pelos pacotes? Todas as personalizações manuais (sistemas adicionados ou removidos) serão limpas.`}
+          confirmLabel="Restaurar padrões"
+          destructive
+          loading={resettingSystems}
+          onConfirm={handleResetSystems}
+          onCancel={() => setConfirmResetSystems(false)}
         />
       )}
     </div>

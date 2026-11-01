@@ -12,7 +12,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/services/api', () => ({
-  default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), delete: vi.fn(), put: vi.fn() },
 }));
 
 import api from '@/services/api';
@@ -36,7 +36,7 @@ function direito(pacotes, extra = {}) {
 }
 
 // Cada chamada a GET /direito consome a proxima resposta da fila (a ultima se repete).
-function dublarApi({ direitos, dispositivos = [], itens = [] }) {
+function dublarApi({ direitos, dispositivos = [], itens = [], sistemas = null }) {
   const fila = [...direitos];
   api.get.mockImplementation(async (url) => {
     if (url === `/admin/clients/${CLIENT.id}/direito`) {
@@ -46,6 +46,21 @@ function dublarApi({ direitos, dispositivos = [], itens = [] }) {
       await new Promise(ok => setTimeout(ok, 20));
       if (r instanceof Error) throw r;
       return { data: r };
+    }
+    if (url === `/admin/clients/${CLIENT.id}/sistemas`) {
+      return {
+        data: sistemas || {
+          systems: ['n64', 'psx'],
+          systems_base: ['n64', 'psx'],
+          sistemas_customizados: { adicionados: [], removidos: [] },
+          customizado: false,
+          vocabulario: [
+            { mnemonico: 'n64', console: 'Nintendo 64' },
+            { mnemonico: 'psx', console: 'PlayStation' },
+            { mnemonico: 'snes', console: 'Super Nintendo' },
+          ],
+        },
+      };
     }
     if (url === `/admin/clients/${CLIENT.id}/devices`) return { data: { dispositivos } };
     if (url === `/admin/clients/${CLIENT.id}/stores`) return { data: { stores: [] } };
@@ -220,5 +235,139 @@ describe('ClientProductsModal: dispositivos', () => {
     renderModal();
     expect(await screen.findByText('Falha ao listar os dispositivos')).toBeInTheDocument();
     expect(screen.queryByText(/Nenhum dispositivo/)).toBeNull();
+  });
+});
+
+describe('ClientProductsModal: edicao e restauracao de sistemas', () => {
+  it('editar_sistemas_abre_lista_com_busca', async () => {
+    dublarApi({
+      direitos: [direito([pacote(100, [{ tipo: 'concessao', store_id: 600005 }])])],
+      sistemas: {
+        systems: ['n64', 'psx'],
+        systems_base: ['n64', 'psx'],
+        sistemas_customizados: { adicionados: [], removidos: [] },
+        customizado: false,
+        vocabulario: [
+          { mnemonico: 'n64', console: 'Nintendo 64' },
+          { mnemonico: 'psx', console: 'PlayStation' },
+          { mnemonico: 'snes', console: 'Super Nintendo' },
+        ],
+      },
+    });
+    renderModal();
+
+    await screen.findByRole('listitem', { name: 'pacote 100' });
+    const btnEditar = screen.getByRole('button', { name: /editar sistemas/i });
+    await userEvent.click(btnEditar);
+
+    expect(await screen.findByText(/Editar sistemas com acesso/i)).toBeInTheDocument();
+    const filtro = screen.getByLabelText('Filtrar sistemas');
+    expect(filtro).toBeInTheDocument();
+
+    const n64Check = screen.getByRole('checkbox', { name: /n64/i });
+    const psxCheck = screen.getByRole('checkbox', { name: /psx/i });
+    const snesCheck = screen.getByRole('checkbox', { name: /snes/i });
+    expect(n64Check).toBeChecked();
+    expect(psxCheck).toBeChecked();
+    expect(snesCheck).not.toBeChecked();
+
+    // Filtra pelo nome do console
+    await userEvent.type(filtro, 'Super');
+    expect(screen.queryByRole('checkbox', { name: /n64/i })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: /snes/i })).toBeInTheDocument();
+
+    // Cancelar fecha o editor
+    const btnsCancelar = screen.getAllByRole('button', { name: 'Cancelar' });
+    await userEvent.click(btnsCancelar[0]);
+    expect(screen.queryByText(/Editar sistemas com acesso/i)).toBeNull();
+  });
+
+  it('salvar_sistemas_atualiza_direito_e_mostra_sucesso', async () => {
+    const antes = direito([pacote(100, [{ tipo: 'concessao', store_id: 600005 }])]);
+    const depois = direito([pacote(100, [{ tipo: 'concessao', store_id: 600005 }])], {
+      systems: ['n64', 'psx', 'snes'],
+      systems_base: ['n64', 'psx'],
+      sistemas_customizados: { adicionados: ['snes'], removidos: [] },
+      customizado: true,
+    });
+    dublarApi({
+      direitos: [antes, depois],
+      sistemas: {
+        systems: ['n64', 'psx'],
+        systems_base: ['n64', 'psx'],
+        sistemas_customizados: { adicionados: [], removidos: [] },
+        customizado: false,
+        vocabulario: [
+          { mnemonico: 'n64', console: 'Nintendo 64' },
+          { mnemonico: 'psx', console: 'PlayStation' },
+          { mnemonico: 'snes', console: 'Super Nintendo' },
+        ],
+      },
+    });
+    api.put.mockResolvedValue({ data: { success: true, count: 1 } });
+    renderModal();
+
+    await screen.findByRole('listitem', { name: 'pacote 100' });
+    await userEvent.click(screen.getByRole('button', { name: /editar sistemas/i }));
+
+    const snesCheck = await screen.findByRole('checkbox', { name: /snes/i });
+    expect(snesCheck).not.toBeChecked();
+    await userEvent.click(snesCheck);
+    expect(snesCheck).toBeChecked();
+
+    await userEvent.click(screen.getByRole('button', { name: /salvar sistemas/i }));
+
+    await waitFor(() => {
+      expect(api.put).toHaveBeenCalledWith('/admin/clients/7/systems', {
+        systems: expect.arrayContaining(['n64', 'psx', 'snes']),
+      });
+    });
+
+    expect(await screen.findByText('Sistemas atualizados com sucesso.')).toBeInTheDocument();
+    expect(screen.queryByText(/Editar sistemas com acesso/i)).toBeNull();
+    expect(await screen.findByText('personalizado')).toBeInTheDocument();
+  });
+
+  it('sistemas_personalizados_mostra_selo_e_botao_restaurar', async () => {
+    const custom = direito([pacote(100, [{ tipo: 'concessao', store_id: 600005 }])], {
+      systems: ['n64', 'psx', 'snes'],
+      systems_base: ['n64', 'psx'],
+      sistemas_customizados: { adicionados: ['snes'], removidos: [] },
+      customizado: true,
+    });
+    const padrao = direito([pacote(100, [{ tipo: 'concessao', store_id: 600005 }])], {
+      systems: ['n64', 'psx'],
+      systems_base: ['n64', 'psx'],
+      sistemas_customizados: { adicionados: [], removidos: [] },
+      customizado: false,
+    });
+    dublarApi({ direitos: [custom, padrao] });
+    api.delete.mockResolvedValue({ data: { success: true } });
+    renderModal();
+
+    await screen.findByRole('listitem', { name: 'pacote 100' });
+    expect(screen.getByText('personalizado')).toBeInTheDocument();
+
+    const btnRestaurar = screen.getByRole('button', { name: /restaurar padrões/i });
+    expect(btnRestaurar).toBeInTheDocument();
+
+    // Cancelar no modal de confirmacao nao restaura
+    await userEvent.click(btnRestaurar);
+    expect(screen.getByText(/Restaurar os sistemas de cliente@x\.com aos originais/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(api.delete).not.toHaveBeenCalled();
+
+    // Confirmar restaura enviando DELETE /admin/clients/<id>/systems
+    await userEvent.click(btnRestaurar);
+    const dialogo = screen.getByText('Restaurar padrões de sistemas').closest('div.max-w-sm');
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Restaurar padrões' }));
+
+    await waitFor(() => {
+      expect(api.delete).toHaveBeenCalledWith('/admin/clients/7/systems');
+    });
+
+    expect(await screen.findByText('Sistemas restaurados aos padrões dos pacotes.')).toBeInTheDocument();
+    expect(screen.queryByText('personalizado')).toBeNull();
+    expect(screen.queryByRole('button', { name: /restaurar padrões/i })).toBeNull();
   });
 });
