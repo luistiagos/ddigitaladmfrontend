@@ -21,6 +21,56 @@ const VOLUME_SERIES = [
   { key: 'chargeback_count', label: 'Chargebacks', color: '#f43f5e', bgClass: 'bg-rose-500' },
 ];
 
+const PERIOD_PRESETS = [
+  { id: 'today', label: 'Hoje' },
+  { id: 'yesterday', label: 'Ontem' },
+  { id: '7d', label: 'Últimos 7 dias' },
+  { id: '30d', label: 'Últimos 30 dias' },
+  { id: 'this_month', label: 'Este Mês' },
+  { id: 'last_month', label: 'Mês Anterior' },
+];
+
+function getPresetDates(preset) {
+  const today = new Date();
+  const format = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  if (preset === 'today') {
+    const s = format(today);
+    return { start: s, end: s };
+  }
+  if (preset === 'yesterday') {
+    const yest = new Date(today);
+    yest.setDate(yest.getDate() - 1);
+    const s = format(yest);
+    return { start: s, end: s };
+  }
+  if (preset === '7d') {
+    const past = new Date(today);
+    past.setDate(past.getDate() - 6);
+    return { start: format(past), end: format(today) };
+  }
+  if (preset === '30d') {
+    const past = new Date(today);
+    past.setDate(past.getDate() - 29);
+    return { start: format(past), end: format(today) };
+  }
+  if (preset === 'this_month') {
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { start: format(first), end: format(today) };
+  }
+  if (preset === 'last_month') {
+    const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const last = new Date(today.getFullYear(), today.getMonth(), 0);
+    return { start: format(first), end: format(last) };
+  }
+  return { start: format(today), end: format(today) };
+}
+
 const COLORS = {
   violet: 'text-violet-400 bg-violet-500/10',
   green:  'text-green-400 bg-green-500/10',
@@ -82,6 +132,7 @@ function SectionTitle({ children }) {
 export default function Dashboard() {
   const [startDate, setStartDate] = useState(todayISO);
   const [endDate, setEndDate] = useState(todayISO);
+  const [preset, setPreset] = useState('today');
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [storeOptions, setStoreOptions] = useState([]);
   const [stats, setStats] = useState(null);
@@ -111,12 +162,21 @@ export default function Dashboard() {
     chargeback_count: true,
   });
 
+  function handlePresetChange(p) {
+    setPreset(p);
+    const dates = getPresetDates(p);
+    setStartDate(dates.start);
+    setEndDate(dates.end);
+  }
+
   // Garantir que endDate nunca fique antes de startDate
   function handleStartDate(val) {
+    setPreset('custom');
     setStartDate(val);
     if (endDate < val) setEndDate(val);
   }
   function handleEndDate(val) {
+    setPreset('custom');
     setEndDate(val);
     if (startDate > val) setStartDate(val);
   }
@@ -259,46 +319,69 @@ export default function Dashboard() {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-white">
-            {isStoreDashboard ? `Dashboard - ${selectedStore?.store_name || 'Loja'}` : 'Dashboard'}
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {isStoreDashboard
-              ? 'Resumo financeiro filtrado pela loja'
-              : isSingleDay ? 'Resumo financeiro do dia' : 'Resumo financeiro do período'}
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 self-start">
-          <select
-            aria-label="Filtrar loja"
-            value={selectedStoreId}
-            onChange={(e) => setSelectedStoreId(e.target.value)}
-            className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
-          >
-            <option value="">Todos</option>
-            {storeOptions.map((store) => (
-              <option key={store.store_id} value={store.store_id}>{store.store_name}</option>
-            ))}
-          </select>
-          <div className="flex items-center gap-1">
-            <input
-              type="date"
-              value={startDate}
-              max={endDate}
-              onChange={(e) => handleStartDate(e.target.value)}
-              className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
-            />
-            <span className="text-gray-500 text-sm">até</span>
-            <input
-              type="date"
-              value={endDate}
-              min={startDate}
-              onChange={(e) => handleEndDate(e.target.value)}
-              className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
-            />
+      <div className="flex flex-col gap-3 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-white">
+              {isStoreDashboard ? `Dashboard - ${selectedStore?.store_name || 'Loja'}` : 'Dashboard'}
+            </h1>
+            <p className="text-sm text-gray-400 mt-1">
+              {isStoreDashboard
+                ? 'Resumo financeiro filtrado pela loja'
+                : isSingleDay ? 'Resumo financeiro do dia' : 'Resumo financeiro do período'}
+            </p>
           </div>
+          <div className="flex flex-col sm:flex-row gap-2 self-start">
+            <select
+              aria-label="Filtrar loja"
+              value={selectedStoreId}
+              onChange={(e) => setSelectedStoreId(e.target.value)}
+              className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+            >
+              <option value="">Todas as lojas</option>
+              {storeOptions.map((store) => (
+                <option key={store.store_id} value={store.store_id}>{store.store_name}</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(e) => handleStartDate(e.target.value)}
+                className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+              />
+              <span className="text-gray-500 text-sm">até</span>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(e) => handleEndDate(e.target.value)}
+                className="bg-gray-800 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Botões de Período Rápido */}
+        <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-gray-800">
+          <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">
+            Período:
+          </span>
+          {PERIOD_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => handlePresetChange(p.id)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                preset === p.id
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700/70'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -444,7 +527,29 @@ export default function Dashboard() {
       </div>
 
       {/* Evolução Diária & Detalhamento Diário — Oculto se for filtro de mesmo dia (isSingleDay) */}
-      {!isSingleDay && (
+      {isSingleDay ? (
+        <div className="mt-8 bg-gray-800/40 border border-dashed border-gray-700/70 rounded-xl p-4 text-center text-xs text-gray-400">
+          <p>
+            O gráfico comparativo e o detalhamento dia a dia são exibidos para filtros de 2 ou mais dias.
+            {' '}
+            <button
+              type="button"
+              onClick={() => handlePresetChange('7d')}
+              className="text-violet-400 hover:text-violet-300 underline font-medium cursor-pointer"
+            >
+              Ver últimos 7 dias
+            </button>
+            {' · '}
+            <button
+              type="button"
+              onClick={() => handlePresetChange('this_month')}
+              className="text-violet-400 hover:text-violet-300 underline font-medium cursor-pointer"
+            >
+              Ver este mês
+            </button>
+          </p>
+        </div>
+      ) : (
         <div className="mt-8 space-y-6">
           {/* Card do Gráfico */}
           <div className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg space-y-4">

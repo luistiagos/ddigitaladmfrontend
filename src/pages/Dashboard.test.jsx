@@ -183,4 +183,28 @@ describe('Dashboard — Gráfico de Evolução e Tabela Diária', () => {
       expect(screen.getAllByText('01/11').length).toBeGreaterThanOrEqual(1);
     });
   });
+
+  it('activates_multi_day_via_preset_button: ao clicar em Últimos 7 dias, exibe o gráfico e a tabela', async () => {
+    setupMocks();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    // Inicialmente no mesmo dia, exibe aviso e oculta o gráfico
+    expect(screen.queryByText(/Evolução Diária/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/O gráfico comparativo e o detalhamento dia a dia são exibidos para filtros de 2 ou mais dias/i)).toBeInTheDocument();
+
+    // Clica no preset "Últimos 7 dias"
+    const btn7d = screen.getByRole('button', { name: 'Últimos 7 dias' });
+    await user.click(btn7d);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Evolução Diária/i)).toBeInTheDocument();
+      expect(screen.getByText(/Detalhamento Diário/i)).toBeInTheDocument();
+    });
+  });
 });
