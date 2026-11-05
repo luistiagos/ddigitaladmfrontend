@@ -1,8 +1,25 @@
-import { useState, useEffect } from 'react';
-import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert, Store, Percent } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert, Store, Percent, Layers, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '@/services/api';
 import { formatCurrency, todayISO } from '@/utils/format';
+
+const FINANCIAL_SERIES = [
+  { key: 'approved_total', label: 'Total Bruto', color: '#10b981', bgClass: 'bg-emerald-500' },
+  { key: 'approved_total_net', label: 'Receita Líquida', color: '#a855f7', bgClass: 'bg-purple-500' },
+  { key: 'fb_spend', label: 'Gasto Meta Ads', color: '#3b82f6', bgClass: 'bg-blue-500' },
+  { key: 'mp_fees_total', label: 'Taxas MP', color: '#06b6d4', bgClass: 'bg-cyan-500' },
+  { key: 'total_expenses', label: 'Total Despesas', color: '#f59e0b', bgClass: 'bg-amber-500' },
+  { key: 'lucro_bruto', label: 'Lucro Bruto', color: '#ec4899', bgClass: 'bg-pink-500' },
+];
+
+const VOLUME_SERIES = [
+  { key: 'approved_count', label: 'Vendas Aprovadas', color: '#10b981', bgClass: 'bg-emerald-500' },
+  { key: 'pending_count', label: 'Vendas Pendentes', color: '#eab308', bgClass: 'bg-yellow-500' },
+  { key: 'failed_count', label: 'Pagamentos Falhos', color: '#ef4444', bgClass: 'bg-red-500' },
+  { key: 'reverted_count', label: 'Revertidos / Estornos', color: '#f97316', bgClass: 'bg-orange-500' },
+  { key: 'chargeback_count', label: 'Chargebacks', color: '#f43f5e', bgClass: 'bg-rose-500' },
+];
 
 const COLORS = {
   violet: 'text-violet-400 bg-violet-500/10',
@@ -70,10 +87,29 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [fbSpend, setFbSpend] = useState(null);
+  const [fbDailySpend, setFbDailySpend] = useState({});
   const [loadingFb, setLoadingFb] = useState(true);
   const [fbError, setFbError] = useState('');
 
   const [metaOk, setMetaOk] = useState(false);
+
+  // Controles do Gráfico Diário
+  const [chartTab, setChartTab] = useState('financial'); // 'financial' | 'volumes'
+  const [visibleFinancial, setVisibleFinancial] = useState({
+    approved_total: true,
+    approved_total_net: true,
+    fb_spend: true,
+    mp_fees_total: true,
+    total_expenses: true,
+    lucro_bruto: true,
+  });
+  const [visibleVolumes, setVisibleVolumes] = useState({
+    approved_count: true,
+    pending_count: true,
+    failed_count: true,
+    reverted_count: true,
+    chargeback_count: true,
+  });
 
   // Garantir que endDate nunca fique antes de startDate
   function handleStartDate(val) {
@@ -110,6 +146,7 @@ export default function Dashboard() {
   useEffect(() => {
     setLoadingFb(true);
     setFbSpend(null);
+    setFbDailySpend({});
     setFbError('');
     const params = new URLSearchParams({ since: startDate, until: endDate });
     if (selectedStoreId) params.set('store_id', selectedStoreId);
@@ -120,6 +157,7 @@ export default function Dashboard() {
         setMetaOk(true);
         if (data.error) throw new Error(data.error);
         setFbSpend(parseFloat(data.spend ?? 0));
+        setFbDailySpend(data.daily_spend || {});
       })
       .catch((e) => {
         // Erro do Meta (502): provider configurado, mas a consulta falhou.
@@ -141,6 +179,82 @@ export default function Dashboard() {
   const selectedStore = storeOptions.find((store) => String(store.store_id) === String(selectedStoreId));
   const isStoreDashboard = Boolean(selectedStoreId);
   const isSingleDay = startDate === endDate;
+
+  // Mescla dados diários do banco com gasto diário do Meta Ads
+  const combinedDailyData = useMemo(() => {
+    const raw = stats?.daily_stats || [];
+    return raw.map((item) => {
+      const fb = (metaOk && fbDailySpend?.[item.date] != null) ? Number(fbDailySpend[item.date]) : 0;
+      const fee = metaOk ? fb * 0.15 : 0;
+      const totExp = item.mp_fees_total + fb + fee;
+      const lucro = metaOk && fbSpend !== null
+        ? item.approved_total_net - (fb + fee)
+        : item.approved_total_net;
+      return {
+        ...item,
+        fb_spend: fb,
+        fb_fee: fee,
+        total_expenses: totExp,
+        lucro_bruto: lucro,
+      };
+    });
+  }, [stats?.daily_stats, fbDailySpend, metaOk, fbSpend]);
+
+  const activeSeriesMeta = chartTab === 'financial' ? FINANCIAL_SERIES : VOLUME_SERIES;
+  const activeVisibility = chartTab === 'financial' ? visibleFinancial : visibleVolumes;
+
+  const { chartMin, chartMax } = useMemo(() => {
+    if (!combinedDailyData.length) return { chartMin: 0, chartMax: 100 };
+    let max = 0;
+    let min = 0;
+    for (const item of combinedDailyData) {
+      for (const s of activeSeriesMeta) {
+        if (activeVisibility[s.key]) {
+          const val = Number(item[s.key] || 0);
+          if (val > max) max = val;
+          if (val < min) min = val;
+        }
+      }
+    }
+    if (chartTab === 'financial') {
+      if (max === 0 && min === 0) return { chartMin: 0, chartMax: 100 };
+      const top = max > 0 ? Math.ceil((max * 1.15) / 10) * 10 : 0;
+      const bottom = min < 0 ? Math.floor((min * 1.15) / 10) * 10 : 0;
+      return { chartMin: bottom, chartMax: Math.max(top, bottom + 10) };
+    }
+    return { chartMin: 0, chartMax: Math.max(10, Math.ceil(max * 1.2)) };
+  }, [combinedDailyData, activeSeriesMeta, activeVisibility, chartTab]);
+
+  const chartRange = Math.max(1, chartMax - chartMin);
+  const getY = (val) => 200 - ((val - chartMin) / chartRange) * 180;
+
+  // Totais da tabela diária no rodapé
+  const tableTotals = useMemo(() => {
+    return combinedDailyData.reduce(
+      (acc, d) => ({
+        approved_count: acc.approved_count + (d.approved_count || 0),
+        approved_total: acc.approved_total + (d.approved_total || 0),
+        approved_total_net: acc.approved_total_net + (d.approved_total_net || 0),
+        mp_fees_total: acc.mp_fees_total + (d.mp_fees_total || 0),
+        fb_spend: acc.fb_spend + (d.fb_spend || 0),
+        total_expenses: acc.total_expenses + (d.total_expenses || 0),
+        lucro_bruto: acc.lucro_bruto + (d.lucro_bruto || 0),
+        pending_count: acc.pending_count + (d.pending_count || 0),
+        failures_count: acc.failures_count + (d.failed_count || 0) + (d.reverted_count || 0) + (d.chargeback_count || 0),
+      }),
+      {
+        approved_count: 0,
+        approved_total: 0,
+        approved_total_net: 0,
+        mp_fees_total: 0,
+        fb_spend: 0,
+        total_expenses: 0,
+        lucro_bruto: 0,
+        pending_count: 0,
+        failures_count: 0,
+      }
+    );
+  }, [combinedDailyData]);
 
   return (
     <div>
@@ -328,6 +442,326 @@ export default function Dashboard() {
 
         </div>
       </div>
+
+      {/* Evolução Diária & Detalhamento Diário — Oculto se for filtro de mesmo dia (isSingleDay) */}
+      {!isSingleDay && (
+        <div className="mt-8 space-y-6">
+          {/* Card do Gráfico */}
+          <div className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-violet-400" />
+                  Evolução Diária
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Acompanhamento cronológico diário de receitas, despesas, lucro e contagens
+                </p>
+              </div>
+
+              {/* Alternador de Modo (Financeiro vs Volumes) */}
+              <div className="flex items-center bg-gray-900/90 p-1 rounded-xl border border-gray-700/70 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setChartTab('financial')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    chartTab === 'financial'
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <DollarSign className="h-3.5 w-3.5" />
+                  Financeiro (R$)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartTab('volumes')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    chartTab === 'volumes'
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Volumes (Qtd)
+                </button>
+              </div>
+            </div>
+
+            {/* Pílulas de Seleção de Séries no Gráfico */}
+            <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-gray-700/50">
+              <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">
+                  Séries no Gráfico:
+                </span>
+                {activeSeriesMeta.map((s) => {
+                  const active = activeVisibility[s.key];
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => {
+                        if (chartTab === 'financial') {
+                          setVisibleFinancial((prev) => ({ ...prev, [s.key]: !prev[s.key] }));
+                        } else {
+                          setVisibleVolumes((prev) => ({ ...prev, [s.key]: !prev[s.key] }));
+                        }
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
+                        active
+                          ? 'bg-gray-900 border-gray-600 text-gray-200 shadow-sm'
+                          : 'bg-gray-900/30 border-gray-800 text-gray-600 opacity-60'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${s.bgClass}`} />
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (chartTab === 'financial') {
+                    setVisibleFinancial({
+                      approved_total: true,
+                      approved_total_net: true,
+                      fb_spend: true,
+                      mp_fees_total: true,
+                      total_expenses: true,
+                      lucro_bruto: true,
+                    });
+                  } else {
+                    setVisibleVolumes({
+                      approved_count: true,
+                      pending_count: true,
+                      failed_count: true,
+                      reverted_count: true,
+                      chargeback_count: true,
+                    });
+                  }
+                }}
+                className="text-[11px] text-violet-400 hover:text-violet-300 underline cursor-pointer"
+              >
+                Ativar todas as séries
+              </button>
+            </div>
+
+            {/* Renderização do Gráfico SVG */}
+            {loadingStats ? (
+              <div className="h-64 flex items-center justify-center text-gray-500 text-sm">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando gráfico...
+              </div>
+            ) : !combinedDailyData.length ? (
+              <div className="h-64 flex items-center justify-center text-gray-500 text-sm">
+                Nenhum dado registrado para o período selecionado.
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto">
+                <div className="min-w-[640px]">
+                  <svg viewBox="0 0 800 240" className="w-full h-64 overflow-visible" role="img" aria-label="Evolução Diária">
+                    {/* Linhas de Grade Horizontais */}
+                    {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+                      const y = 200 - pct * 180;
+                      const val = chartMin + pct * chartRange;
+                      const formattedVal = chartTab === 'financial' ? formatCurrency(val) : Math.round(val);
+                      return (
+                        <g key={i}>
+                          <line x1="45" y1={y} x2="790" y2={y} stroke="#374151" strokeDasharray="3 3" strokeWidth="1" />
+                          <text x="40" y={y + 3} fill="#9ca3af" fontSize="10" textAnchor="end">
+                            {formattedVal}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    {/* Linhas das Séries */}
+                    {activeSeriesMeta.map((s) => {
+                      if (!activeVisibility[s.key]) return null;
+                      const pts = combinedDailyData.map((item, idx) => {
+                        const x = 50 + (idx / Math.max(1, combinedDailyData.length - 1)) * 730;
+                        const val = Number(item[s.key] || 0);
+                        const y = getY(val);
+                        return `${x},${y}`;
+                      });
+
+                      return (
+                        <g key={s.key}>
+                          <polyline
+                            fill="none"
+                            stroke={s.color}
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={pts.join(' ')}
+                          />
+                          {combinedDailyData.map((item, idx) => {
+                            const x = 50 + (idx / Math.max(1, combinedDailyData.length - 1)) * 730;
+                            const val = Number(item[s.key] || 0);
+                            const y = getY(val);
+                            const displayVal = chartTab === 'financial' ? formatCurrency(val) : val;
+                            return (
+                              <circle
+                                key={idx}
+                                cx={x}
+                                cy={y}
+                                r="3.5"
+                                fill={s.color}
+                                className="hover:r-5 transition-all cursor-pointer"
+                              >
+                                <title>{`${s.label}: ${displayVal} (${item.label || item.date})`}</title>
+                              </circle>
+                            );
+                          })}
+                        </g>
+                      );
+                    })}
+
+                    {/* Labels do Eixo X */}
+                    {combinedDailyData.map((item, idx) => {
+                      const step = Math.max(1, Math.floor(combinedDailyData.length / 10));
+                      if (idx % step !== 0 && idx !== combinedDailyData.length - 1) return null;
+                      const x = 50 + (idx / Math.max(1, combinedDailyData.length - 1)) * 730;
+                      return (
+                        <text key={idx} x={x} y="222" fill="#9ca3af" fontSize="10" textAnchor="middle">
+                          {item.label || item.date}
+                        </text>
+                      );
+                    })}
+                  </svg>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tabela Analítica Diária */}
+          <div className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-violet-400" />
+                  Detalhamento Diário
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Valores individuais e despesas registradas por dia no período
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="border-b border-gray-700 text-gray-400 font-semibold uppercase tracking-wider">
+                    <th className="pb-3 pr-4">Data</th>
+                    <th className="pb-3 px-2 text-right">Vendas</th>
+                    <th className="pb-3 px-2 text-right">Total Bruto</th>
+                    <th className="pb-3 px-2 text-right">Receita Líquida</th>
+                    <th className="pb-3 px-2 text-right">Taxas MP</th>
+                    <th className="pb-3 px-2 text-right">Meta Ads</th>
+                    <th className="pb-3 px-2 text-right">Total Despesas</th>
+                    <th className="pb-3 px-2 text-right">Lucro Bruto</th>
+                    <th className="pb-3 px-2 text-right">Pendentes</th>
+                    <th className="pb-3 pl-2 text-right">Falhas/Estornos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800 text-gray-300">
+                  {loadingStats ? (
+                    <tr>
+                      <td colSpan="10" className="py-6 text-center text-gray-500">
+                        Carregando tabela diária...
+                      </td>
+                    </tr>
+                  ) : !combinedDailyData.length ? (
+                    <tr>
+                      <td colSpan="10" className="py-6 text-center text-gray-500">
+                        Nenhum registro para o período.
+                      </td>
+                    </tr>
+                  ) : (
+                    combinedDailyData.map((d) => {
+                      const failures = (d.failed_count || 0) + (d.reverted_count || 0) + (d.chargeback_count || 0);
+                      return (
+                        <tr key={d.date} className="hover:bg-gray-700/30 transition-colors">
+                          <td className="py-2.5 pr-4 font-medium text-white">
+                            <span className="font-semibold">{d.label}</span>
+                            <span className="text-[10px] text-gray-500 ml-1.5">({d.date})</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-right">
+                            <span className="inline-flex items-center justify-center min-w-6 h-5 rounded-full bg-green-500/15 text-green-400 text-[11px] font-bold px-1.5">
+                              {d.approved_count}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-2 text-right text-gray-200 font-medium">
+                            {formatCurrency(d.approved_total)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right text-violet-300 font-medium">
+                            {formatCurrency(d.approved_total_net)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right text-cyan-400">
+                            {formatCurrency(d.mp_fees_total)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right text-blue-400">
+                            {metaOk ? formatCurrency(d.fb_spend) : '—'}
+                          </td>
+                          <td className="py-2.5 px-2 text-right text-amber-400 font-medium">
+                            {formatCurrency(d.total_expenses)}
+                          </td>
+                          <td className={`py-2.5 px-2 text-right font-bold ${d.lucro_bruto >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {formatCurrency(d.lucro_bruto)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right text-yellow-400">
+                            {d.pending_count > 0 ? d.pending_count : '—'}
+                          </td>
+                          <td className="py-2.5 pl-2 text-right text-red-400">
+                            {failures > 0 ? failures : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                {combinedDailyData.length > 0 && !loadingStats && (
+                  <tfoot className="border-t-2 border-gray-700 bg-gray-900/60 font-bold text-gray-200">
+                    <tr>
+                      <td className="py-3 pr-4 text-white uppercase tracking-wider text-[11px]">
+                        Totais do Período
+                      </td>
+                      <td className="py-3 px-2 text-right text-green-400">
+                        {tableTotals.approved_count}
+                      </td>
+                      <td className="py-3 px-2 text-right text-white">
+                        {formatCurrency(tableTotals.approved_total)}
+                      </td>
+                      <td className="py-3 px-2 text-right text-violet-300">
+                        {formatCurrency(tableTotals.approved_total_net)}
+                      </td>
+                      <td className="py-3 px-2 text-right text-cyan-400">
+                        {formatCurrency(tableTotals.mp_fees_total)}
+                      </td>
+                      <td className="py-3 px-2 text-right text-blue-400">
+                        {metaOk ? formatCurrency(tableTotals.fb_spend) : '—'}
+                      </td>
+                      <td className="py-3 px-2 text-right text-amber-400">
+                        {formatCurrency(tableTotals.total_expenses)}
+                      </td>
+                      <td className={`py-3 px-2 text-right ${tableTotals.lucro_bruto >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatCurrency(tableTotals.lucro_bruto)}
+                      </td>
+                      <td className="py-3 px-2 text-right text-yellow-400">
+                        {tableTotals.pending_count}
+                      </td>
+                      <td className="py-3 pl-2 text-right text-red-400">
+                        {tableTotals.failures_count}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Vendas por Loja / Produtos */}
       <div className="mt-6">
