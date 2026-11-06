@@ -7,7 +7,7 @@ import { formatDateTime, formatCurrency } from '@/utils/format';
 const REMARKET_STATUSES = ['create', 'pending'];
 
 // Human-readable labels for MercadoPago payment_method_id / payment_type_id
-const PAYMENT_METHOD_LABELS = {
+export const PAYMENT_METHOD_LABELS = {
   pix: 'Pix',
   bolbradesco: 'Boleto Bradesco',
   pec: 'Boleto (PEC)',

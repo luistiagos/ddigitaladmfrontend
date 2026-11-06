@@ -6,7 +6,7 @@ import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import { formatDateTime, formatCurrency } from '@/utils/format';
 import useAdminGrid from '@/utils/useAdminGrid';
-import TransactionDetailModal from '@/modals/TransactionDetailModal';
+import TransactionDetailModal, { PAYMENT_METHOD_LABELS } from '@/modals/TransactionDetailModal';
 
 const PER_PAGE = 20;
 
@@ -100,6 +100,28 @@ export default function Transactions() {
       className: 'px-4 py-3 text-gray-300 whitespace-nowrap',
       render: r => formatCurrency(r.value),
       csvValue: r => r.value != null ? Number(r.value).toFixed(2).replace('.', ',') : '',
+    },
+    {
+      key: 'issuer_name', label: 'Banco', sortable: true,
+      className: 'px-4 py-3 text-gray-300 whitespace-nowrap',
+      render: r => {
+        const bank = r.issuer_name;
+        const method = r.payment_method_id ? (PAYMENT_METHOD_LABELS[r.payment_method_id] || r.payment_method_id) : null;
+        if (bank && method && bank.toLowerCase() !== method.toLowerCase()) {
+          return (
+            <div className="flex flex-col">
+              <span className="text-gray-200 text-xs font-medium truncate max-w-40" title={bank}>{bank}</span>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider">{method}</span>
+            </div>
+          );
+        }
+        return (
+          <span className="text-xs text-gray-300 truncate max-w-40 block" title={bank || method || '—'}>
+            {bank || method || '—'}
+          </span>
+        );
+      },
+      csvValue: r => r.issuer_name ? (r.payment_method_id ? `${r.issuer_name} (${r.payment_method_id})` : r.issuer_name) : (r.payment_method_id || ''),
     },
     {
       key: 'datetime', label: 'Data/Hora', sortable: true,
