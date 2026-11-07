@@ -45,8 +45,8 @@ export default function Transactions() {
     useAdminGrid({ defaultSort: 'datetime', defaultDir: 'desc' });
 
   useEffect(() => {
-    api.get('/admin/items?per_page=100').then((r) => setProducts(r.data.items || [])).catch(() => {});
-    api.get('/admin/stores').then((r) => setStores(r.data.stores || [])).catch(() => {});
+    api.get('/admin/items?per_page=100').then((r) => setProducts(r.data.items || [])).catch(() => { });
+    api.get('/admin/stores').then((r) => setStores(r.data.stores || [])).catch(() => { });
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -110,16 +110,16 @@ export default function Transactions() {
           return <span className="text-gray-500 text-xs">—</span>;
         }
         const method = r.payment_method_id ? (PAYMENT_METHOD_LABELS[r.payment_method_id] || r.payment_method_id) : null;
-        const showMethod = method && method.toLowerCase() !== bank.toLowerCase() && r.payment_method_id !== 'account_money';
-        return (
-          <div className="flex flex-col">
-            <span className="text-gray-200 text-xs font-medium truncate max-w-44" title={bank}>{bank}</span>
-            {showMethod && (
-              <span className="text-[10px] text-gray-400 uppercase tracking-wider">{method}</span>
+              const showMethod = method && method.toLowerCase() !== bank.toLowerCase() && r.payment_method_id !== 'account_money';
+              return (
+              <div className="flex flex-col">
+                <span className="text-gray-200 text-xs font-medium truncate max-w-44" title={bank}>{bank}</span>
+                {showMethod && (
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider">{method}</span>
             )}
-          </div>
-        );
-      },
+            </div>
+          );
+        },
       csvValue: r => getResolvedBankName(r) || '',
     },
     {

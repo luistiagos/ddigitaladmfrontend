@@ -118,44 +118,44 @@ describe('Transactions — coluna Banco na grid', () => {
     expect(row).toHaveTextContent('Mastercard');
   });
 
-  it('exibe travessão quando issuer_name for nulo, sem exibir o método no lugar do banco', async () => {
-    render(<Transactions />);
-    const emailCell = await screen.findByText('cliente.sem_banco@exemplo.com');
-    const row = emailCell.closest('tr');
+    it('exibe travessão quando issuer_name for nulo, sem exibir o método no lugar do banco', async () => {
+      render(<Transactions />);
+      const emailCell = await screen.findByText('cliente.sem_banco@exemplo.com');
+      const row = emailCell.closest('tr');
 
-    expect(row).toHaveTextContent('—');
-    expect(row).not.toHaveTextContent('Banco Inter');
-  });
+      expect(row).toHaveTextContent('—');
+      expect(row).not.toHaveTextContent('Banco Inter');
+    });
 
-  it('resolve account_money para Mercado Pago na coluna Banco', async () => {
-    render(<Transactions />);
-    const emailCell = await screen.findByText('cliente.account_money@exemplo.com');
-    const row = emailCell.closest('tr');
+    it('resolve account_money para Mercado Pago na coluna Banco', async () => {
+      render(<Transactions />);
+      const emailCell = await screen.findByText('cliente.account_money@exemplo.com');
+      const row = emailCell.closest('tr');
 
-    expect(row).toHaveTextContent('Mercado Pago');
-  });
+      expect(row).toHaveTextContent('Mercado Pago');
+    });
 
-  it('rejeita tipos genéricos como pix no issuer_name exibindo travessão', async () => {
-    render(<Transactions />);
-    const emailCell = await screen.findByText('cliente.pix_legado@exemplo.com');
-    const row = emailCell.closest('tr');
+    it('rejeita tipos genéricos como pix no issuer_name exibindo travessão', async () => {
+      render(<Transactions />);
+      const emailCell = await screen.findByText('cliente.pix_legado@exemplo.com');
+      const row = emailCell.closest('tr');
 
-    expect(row).toHaveTextContent('—');
-  });
+      expect(row).toHaveTextContent('—');
+    });
 
-  it('permite ordenar por issuer_name ao clicar no cabeçalho Banco', async () => {
-    const user = userEvent.setup();
-    render(<Transactions />);
-    await screen.findByText('cliente.pix@exemplo.com');
+    it('permite ordenar por issuer_name ao clicar no cabeçalho Banco', async () => {
+      const user = userEvent.setup();
+      render(<Transactions />);
+      await screen.findByText('cliente.pix@exemplo.com');
 
-    const header = screen.getByRole('columnheader', { name: /Banco/ });
-    await user.click(header);
+      const header = screen.getByRole('columnheader', { name: /Banco/ });
+      await user.click(header);
 
-    await waitFor(() => {
-      const calls = chamadasDeTransacoes();
-      const lastCall = calls[calls.length - 1];
-      const params = new URLSearchParams(lastCall.split('?')[1]);
-      expect(params.get('sort_column')).toBe('issuer_name');
+      await waitFor(() => {
+        const calls = chamadasDeTransacoes();
+        const lastCall = calls[calls.length - 1];
+        const params = new URLSearchParams(lastCall.split('?')[1]);
+        expect(params.get('sort_column')).toBe('issuer_name');
+      });
     });
   });
-});

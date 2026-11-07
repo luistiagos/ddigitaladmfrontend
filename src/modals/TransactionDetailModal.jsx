@@ -9,7 +9,6 @@ const REMARKET_STATUSES = ['create', 'pending'];
 // Human-readable labels for MercadoPago payment_method_id / payment_type_id
 export const PAYMENT_METHOD_LABELS = {
   pix: 'Pix',
-  account_money: 'Saldo Mercado Pago',
   bolbradesco: 'Boleto Bradesco',
   pec: 'Boleto (PEC)',
   pagofacil: 'Pago Fácil',
@@ -43,36 +42,6 @@ function paymentMethodLabel(methodId, typeId) {
   const type = PAYMENT_TYPE_LABELS[typeId] || typeId;
   if (method && type && method !== type) return `${method} (${type})`;
   return method || type;
-}
-
-export const INVALID_BANK_NAMES = new Set([
-  'pix', 'account_money', 'credit_card', 'credcard', 'debit_card',
-  'ticket', 'bank_transfer', 'prepaid_card', 'digital_currency',
-  'digital_wallet', 'none', 'null', 'undefined'
-]);
-
-export function getResolvedBankName(tx) {
-  if (!tx) return null;
-  const pm = (tx.payment_method_id || '').toLowerCase();
-  const pt = (tx.payment_type_id || '').toLowerCase();
-  const raw = (tx.issuer_name || '').trim();
-
-  if (raw && !INVALID_BANK_NAMES.has(raw.toLowerCase())) {
-    return raw;
-  }
-
-  // Deduções conhecidas por meio de pagamento
-  if (pm === 'account_money' || pt === 'account_money') {
-    return 'Mercado Pago';
-  }
-  if (pm === 'bolbradesco') {
-    return 'Banco Bradesco';
-  }
-  if (pm === 'pec') {
-    return 'Caixa Econômica Federal';
-  }
-
-  return null;
 }
 
 export default function TransactionDetailModal({ transaction: initialTx, onClose, onSaveSuccess }) {
