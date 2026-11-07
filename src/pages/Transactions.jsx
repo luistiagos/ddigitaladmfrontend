@@ -6,7 +6,7 @@ import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import { formatDateTime, formatCurrency } from '@/utils/format';
 import useAdminGrid from '@/utils/useAdminGrid';
-import TransactionDetailModal, { PAYMENT_METHOD_LABELS } from '@/modals/TransactionDetailModal';
+import TransactionDetailModal, { PAYMENT_METHOD_LABELS, getResolvedBankName } from '@/modals/TransactionDetailModal';
 
 const PER_PAGE = 20;
 
@@ -105,23 +105,22 @@ export default function Transactions() {
       key: 'issuer_name', label: 'Banco', sortable: true,
       className: 'px-4 py-3 text-gray-300 whitespace-nowrap',
       render: r => {
-        const bank = r.issuer_name;
-        const method = r.payment_method_id ? (PAYMENT_METHOD_LABELS[r.payment_method_id] || r.payment_method_id) : null;
-        if (bank && method && bank.toLowerCase() !== method.toLowerCase()) {
-          return (
-            <div className="flex flex-col">
-              <span className="text-gray-200 text-xs font-medium truncate max-w-40" title={bank}>{bank}</span>
-              <span className="text-[10px] text-gray-400 uppercase tracking-wider">{method}</span>
-            </div>
-          );
+        const bank = getResolvedBankName(r);
+        if (!bank) {
+          return <span className="text-gray-500 text-xs">—</span>;
         }
+        const method = r.payment_method_id ? (PAYMENT_METHOD_LABELS[r.payment_method_id] || r.payment_method_id) : null;
+        const showMethod = method && method.toLowerCase() !== bank.toLowerCase() && r.payment_method_id !== 'account_money';
         return (
-          <span className="text-xs text-gray-300 truncate max-w-40 block" title={bank || method || '—'}>
-            {bank || method || '—'}
-          </span>
+          <div className="flex flex-col">
+            <span className="text-gray-200 text-xs font-medium truncate max-w-44" title={bank}>{bank}</span>
+            {showMethod && (
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider">{method}</span>
+            )}
+          </div>
         );
       },
-      csvValue: r => r.issuer_name ? (r.payment_method_id ? `${r.issuer_name} (${r.payment_method_id})` : r.issuer_name) : (r.payment_method_id || ''),
+      csvValue: r => getResolvedBankName(r) || '',
     },
     {
       key: 'datetime', label: 'Data/Hora', sortable: true,

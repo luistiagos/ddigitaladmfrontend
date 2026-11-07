@@ -49,6 +49,32 @@ const TRANSACOES = [
     payment_type_id: 'bank_transfer',
     issuer_name: null,
   },
+  {
+    id: 104,
+    email: 'cliente.account_money@exemplo.com',
+    phone: '11999990004',
+    product_id: 1,
+    title: 'Plataforma Completa',
+    value: 47.0,
+    datetime: '2026-11-06T18:15:00Z',
+    status: 'approved',
+    payment_method_id: 'account_money',
+    payment_type_id: 'account_money',
+    issuer_name: 'account_money',
+  },
+  {
+    id: 105,
+    email: 'cliente.pix_legado@exemplo.com',
+    phone: '11999990005',
+    product_id: 1,
+    title: 'Plataforma Completa',
+    value: 47.0,
+    datetime: '2026-11-06T18:20:00Z',
+    status: 'pending',
+    payment_method_id: 'pix',
+    payment_type_id: 'bank_transfer',
+    issuer_name: 'pix',
+  },
 ];
 
 function chamadasDeTransacoes() {
@@ -92,13 +118,29 @@ describe('Transactions — coluna Banco na grid', () => {
     expect(row).toHaveTextContent('Mastercard');
   });
 
-  it('faz fallback para o método quando issuer_name for nulo', async () => {
+  it('exibe travessão quando issuer_name for nulo, sem exibir o método no lugar do banco', async () => {
     render(<Transactions />);
     const emailCell = await screen.findByText('cliente.sem_banco@exemplo.com');
     const row = emailCell.closest('tr');
 
-    expect(row).toHaveTextContent('Pix');
+    expect(row).toHaveTextContent('—');
     expect(row).not.toHaveTextContent('Banco Inter');
+  });
+
+  it('resolve account_money para Mercado Pago na coluna Banco', async () => {
+    render(<Transactions />);
+    const emailCell = await screen.findByText('cliente.account_money@exemplo.com');
+    const row = emailCell.closest('tr');
+
+    expect(row).toHaveTextContent('Mercado Pago');
+  });
+
+  it('rejeita tipos genéricos como pix no issuer_name exibindo travessão', async () => {
+    render(<Transactions />);
+    const emailCell = await screen.findByText('cliente.pix_legado@exemplo.com');
+    const row = emailCell.closest('tr');
+
+    expect(row).toHaveTextContent('—');
   });
 
   it('permite ordenar por issuer_name ao clicar no cabeçalho Banco', async () => {
