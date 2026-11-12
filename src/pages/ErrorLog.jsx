@@ -8,7 +8,14 @@ import useAdminGrid from '@/utils/useAdminGrid';
 
 const PER_PAGE = 20;
 
-const EMPTY_FILTERS = { file: '', method: '', project: '', start_date: '', end_date: '', status: '' };
+const EMPTY_FILTERS = { file: '', method: '', project: '', start_date: '', end_date: '', status: '', account: '' };
+
+// Cliente do erro, em texto: o e-mail inteiro que a loja gravou; so o id da conta quando o
+// e-mail nao foi resolvido; vazio no erro sem conta (ou com o backend ainda sem as colunas,
+// quando as chaves nem vem). Fonte unica da coluna, do CSV/PDF e do modal de detalhe.
+function clienteDoErro(row) {
+  return row?.account_email || row?.account_id || '';
+}
 
 export default function ErrorLog() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -54,6 +61,8 @@ export default function ErrorLog() {
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date)   params.set('end_date',   applied.end_date);
       if (applied.status)     params.set('status',     applied.status);
+      const account = applied.account.trim();
+      if (account)            params.set('account',    account);
       const res = await api.get(`/admin/errors?${params}`);
       setData({ items: res.data.items || [], total: res.data.total || 0 });
     } catch {
@@ -230,6 +239,17 @@ export default function ErrorLog() {
       csvValue: r => r.project ?? '',
     },
     {
+      // Nao ordenavel: o backend nao aceita ordenar por conta (troca por `time` em silencio).
+      key: 'account', label: 'Cliente',
+      className: 'px-4 py-3 text-gray-300 text-xs break-all max-w-[240px]',
+      render: r => {
+        const cliente = clienteDoErro(r);
+        if (!cliente) return <span className="text-gray-600">—</span>;
+        return <span title={r.account_id ? `conta ${r.account_id}` : undefined}>{cliente}</span>;
+      },
+      csvValue: r => clienteDoErro(r),
+    },
+    {
       key: 'visualizar', label: '',
       className: 'px-4 py-3 text-center w-16',
       render: r => (
@@ -289,6 +309,17 @@ export default function ErrorLog() {
               value={filters.method}
               onChange={e => setFilters(f => ({ ...f, method: e.target.value }))}
               className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 w-44 focus:outline-none focus:border-violet-500"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="filtro-cliente" className="text-xs text-gray-500">Cliente</label>
+            <input
+              id="filtro-cliente"
+              type="text"
+              placeholder="e-mail ou id"
+              value={filters.account}
+              onChange={e => setFilters(f => ({ ...f, account: e.target.value }))}
+              className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-violet-500"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -438,6 +469,12 @@ export default function ErrorLog() {
             <DetailField label="Método" value={detailModal.method || '—'} />
             <DetailField label="Mensagem" value={detailModal.message || '—'} mono />
             <DetailField label="Projeto" value={detailModal.project || '—'} />
+            <DetailField
+              label="Cliente"
+              value={detailModal.account_email && detailModal.account_id
+                ? `${detailModal.account_email} (conta ${detailModal.account_id})`
+                : (clienteDoErro(detailModal) || '—')}
+            />
             <DetailField label="Plataforma" value={detailModal.platform || '—'} />
             <DetailField label="Tela" value={detailModal.screen || '—'} />
             <DetailField label="User-Agent" value={detailModal.user_agent || '—'} />
