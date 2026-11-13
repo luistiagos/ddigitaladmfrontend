@@ -22,16 +22,28 @@ import api from '@/services/api';
 import BotConfig from './BotConfig';
 
 const URL_TETO = '/admin/wpp/llm_budget_cap';
+const URL_ERROS = '/admin/wpp/agente/erros-da-conta-config';
 
-/** `teto`: resposta do GET do teto, ou um erro para rejeitar. Os GETs dos outros cards
- * falham (todos engolem o erro e ficam no estado inicial), para nenhum depender de fixture. */
-function montarApi({ teto = { teto: 4.0, padrao: true }, post = null } = {}) {
+/** `teto`/`erros`: resposta do GET de cada card com estado próprio, ou um erro para rejeitar.
+ * Os GETs dos outros cards falham (todos engolem o erro e ficam no estado inicial), para nenhum
+ * depender de fixture. Os dois cards com estado próprio MOSTRAM o erro de leitura (`alert`),
+ * por isso os dois têm resposta padrão aqui. */
+function montarApi({
+  teto = { teto: 4.0, padrao: true }, post = null,
+  erros = { enabled: false, updated_at: null }, postErros = null,
+} = {}) {
+  const responder = (v) => (v instanceof Error ? Promise.reject(v) : Promise.resolve({ data: v }));
   api.get.mockImplementation((url) => {
-    if (url === URL_TETO) return teto instanceof Error ? Promise.reject(teto) : Promise.resolve({ data: teto });
+    if (url === URL_TETO) return responder(teto);
+    if (url === URL_ERROS) return responder(erros);
     return Promise.reject(new Error(`fora do teste: ${url}`));
   });
   api.post.mockImplementation((url, body) => {
     if (url === URL_TETO) return post ? post(body) : Promise.resolve({ data: { success: true, teto: Number(body.teto), padrao: false } });
+    if (url === URL_ERROS) {
+      return postErros ? postErros(body)
+        : Promise.resolve({ data: { success: true, enabled: body.enabled, updated_at: '2026-11-13 16:18:19' } });
+    }
     return Promise.resolve({ data: {} });
   });
 }
@@ -39,6 +51,13 @@ function montarApi({ teto = { teto: 4.0, padrao: true }, post = null } = {}) {
 function erroHttp(status, error) {
   const e = new Error(`HTTP ${status}`);
   e.response = { status, data: { success: false, error } };
+  return e;
+}
+
+/** Erro no formato da rota do interruptor (`{erro}`, como as rotas de chamados). */
+function erroHttpPt(status, erro) {
+  const e = new Error(`HTTP ${status}`);
+  e.response = { status, data: { erro } };
   return e;
 }
 
@@ -123,5 +142,88 @@ describe('card do teto de custo', () => {
     await userEvent.click(screen.getByRole('button', { name: /Tentar de novo/ }));
     expect(await vigente()).toHaveTextContent('US$ 4,00');
     await waitFor(() => expect(salvar()).toBeEnabled());
+  });
+});
+
+/**
+ * T9 — interruptor `agente_erros_da_conta` (o agente de pós-venda consulta os erros do app).
+ * Doc: docs/modules/chatbot-whatsapp/changes/2026-11-12-agente-consulta-erros-da-conta/tasks.md
+ */
+describe('interruptor do agente que consulta os erros do app', () => {
+  const estado = () => screen.findByTestId('erros-da-conta-estado');
+  const chave = () => screen.getByRole('switch', { name: 'Agente consulta os erros do app' });
+
+  it('mostra_ligado_e_desligado_pelo_servidor', async () => {
+    montarApi({ erros: { enabled: true, updated_at: '2026-11-13 16:18:19' } });
+    const { unmount } = render(<BotConfig />);
+    let e = await estado();
+    expect(e).toHaveTextContent('Ligado');
+    expect(e).toHaveTextContent('alterado em 13/11/2026');
+    expect(chave()).toHaveAttribute('aria-checked', 'true');
+    unmount();
+
+    montarApi({ erros: { enabled: false, updated_at: null } });
+    render(<BotConfig />);
+    e = await estado();
+    expect(e).toHaveTextContent('Desligado');
+    expect(e).toHaveTextContent('nunca alterado');
+    expect(chave()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('erro_na_leitura_nao_vira_desligado', async () => {
+    montarApi({ erros: erroHttpPt(500, 'Nao foi possivel ler a configuracao.') });
+    render(<BotConfig />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nao foi possivel ler a configuracao.');
+    expect(screen.queryByTestId('erros-da-conta-estado')).toBeNull();
+    expect(screen.queryByText('Desligado')).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Agente consulta os erros do app' })).toBeNull();
+
+    // "Tentar de novo" relê e mostra o estado real.
+    montarApi({ erros: { enabled: true, updated_at: '2026-11-13 16:18:19' } });
+    await userEvent.click(screen.getByRole('button', { name: /Tentar de novo/ }));
+    expect(await estado()).toHaveTextContent('Ligado');
+  });
+
+  it('clicar_grava_e_mostra_o_que_o_servidor_devolveu', async () => {
+    // A resposta diz `enabled: false` de propósito: a tela tem de refletir o servidor, não o clique.
+    montarApi({
+      erros: { enabled: false, updated_at: null },
+      postErros: () => Promise.resolve({ data: { success: true, enabled: false, updated_at: '2026-11-13 17:00:00' } }),
+    });
+    render(<BotConfig />);
+    await estado();
+    await userEvent.click(chave());
+
+    expect(api.post).toHaveBeenCalledWith(URL_ERROS, { enabled: true });
+    await waitFor(async () => expect(await estado()).toHaveTextContent('alterado em 13/11/2026'));
+    expect(await estado()).toHaveTextContent('Desligado');
+    expect(chave()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('ligar_reflete_ligado', async () => {
+    montarApi();
+    render(<BotConfig />);
+    await estado();
+    await userEvent.click(chave());
+    expect(api.post).toHaveBeenCalledWith(URL_ERROS, { enabled: true });
+    await screen.findByText('Ligado.');
+    expect(await estado()).toHaveTextContent('Ligado');
+    expect(chave()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('falha_ao_salvar_mostra_erro_e_volta_o_estado', async () => {
+    montarApi({
+      erros: { enabled: false, updated_at: null },
+      postErros: () => Promise.reject(erroHttpPt(500, 'Falha ao salvar a configuracao.')),
+    });
+    render(<BotConfig />);
+    await estado();
+    await userEvent.click(chave());
+
+    await screen.findByText('Falha ao salvar a configuracao.');
+    expect(await estado()).toHaveTextContent('Desligado');
+    expect(chave()).toHaveAttribute('aria-checked', 'false');
+    await waitFor(() => expect(chave()).toBeEnabled());
   });
 });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Bot, Play, CheckCircle2, XCircle, Loader2, PhoneCall, Webhook, RefreshCw, AlertTriangle, Eye, Activity, KeyRound, Save, Trash2, Plus, X, DollarSign } from 'lucide-react';
 import api from '@/services/api';
-import { formatUsd } from '@/utils/format';
+import { formatUsd, formatUtcDateTime } from '@/utils/format';
 
 function DiagStep({ step }) {
   return (
@@ -29,6 +29,124 @@ function DiagStep({ step }) {
           </pre>
         )}
       </div>
+    </div>
+  );
+}
+
+const URL_ERROS_DA_CONTA = '/admin/wpp/agente/erros-da-conta-config';
+
+/**
+ * Interruptor `agente_erros_da_conta`: o agente de pós-venda consulta os erros do app de PC da
+ * conta do cliente. Como o card do teto: erro na LEITURA aparece e trava o botão — nunca mostra
+ * "desligado" sem ter lido. Falha ao salvar mostra o erro e o estado fica o que estava.
+ * Doc: docs/modules/chatbot-whatsapp/changes/2026-11-12-agente-consulta-erros-da-conta/tasks.md (T9)
+ */
+export function AgenteErrosDaContaCard() {
+  const [config, setConfig] = useState(null);     // {enabled, updated_at} lido do servidor
+  const [loadError, setLoadError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);           // {type, text}
+
+  async function load() {
+    setLoadError(null);
+    setConfig(null);
+    try {
+      const res = await api.get(URL_ERROS_DA_CONTA);
+      setConfig({ enabled: res.data.enabled === true, updated_at: res.data.updated_at || null });
+    } catch (err) {
+      setLoadError(err.response?.data?.erro || 'Não foi possível ler a configuração.');
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function toggle() {
+    const novo = !config.enabled;
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await api.post(URL_ERROS_DA_CONTA, { enabled: novo });
+      setConfig({ enabled: res.data.enabled === true, updated_at: res.data.updated_at || null });
+      setMsg({ type: 'success', text: res.data.enabled ? 'Ligado.' : 'Desligado.' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.erro || 'Erro ao salvar. Nada mudou.' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const loaded = config !== null;
+  const ligado = loaded && config.enabled;
+  return (
+    <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
+            Agente consulta os erros do app de PC do cliente (pós-venda)
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Ligado: quando um comprador do app de PC pede ajuda, o agente vê os erros recentes da conta dele
+            (últimas 48 h) e já orienta sem pedir print. Desligado: o agente responde como antes. Vale na
+            mensagem seguinte, sem deploy.
+          </p>
+        </div>
+        {loaded && (
+          <button
+            type="button"
+            onClick={toggle}
+            disabled={saving}
+            role="switch"
+            aria-checked={ligado}
+            aria-label="Agente consulta os erros do app"
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:opacity-50 ${
+              ligado ? 'bg-green-500' : 'bg-gray-600'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+              ligado ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        )}
+      </div>
+
+      <div className="mt-3">
+        {loadError ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-red-400 flex items-center gap-2" role="alert">
+              <XCircle className="h-4 w-4" /> {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={load}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 transition"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Tentar de novo
+            </button>
+          </div>
+        ) : !loaded ? (
+          <div className="text-sm text-gray-400 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+          </div>
+        ) : (
+          <p className="text-sm text-gray-300" data-testid="erros-da-conta-estado">
+            {ligado ? (
+              <span className="font-semibold text-green-400">Ligado</span>
+            ) : (
+              <span className="font-semibold text-gray-300">Desligado</span>
+            )}
+            {saving && <Loader2 className="inline h-3.5 w-3.5 ml-2 animate-spin" />}
+            <span className="ml-2 text-xs text-gray-500">
+              {config.updated_at ? `alterado em ${formatUtcDateTime(config.updated_at)}` : 'nunca alterado'}
+            </span>
+          </p>
+        )}
+      </div>
+      {msg && (
+        <p className={`text-xs mt-2.5 ${msg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+          {msg.text}
+        </p>
+      )}
     </div>
   );
 }
@@ -500,6 +618,9 @@ export default function BotConfig() {
 
         {/* ── Teto de custo de IA por comprador ── */}
         <LlmBudgetCapCard />
+
+        {/* ── Agente consulta os erros do app de PC da conta ── */}
+        <AgenteErrosDaContaCard />
 
         {/* ── Linha de teste do dono ── */}
         <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-6">
