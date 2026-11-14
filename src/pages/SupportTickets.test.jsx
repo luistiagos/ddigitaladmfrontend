@@ -651,3 +651,35 @@ describe('custo de IA', () => {
     expect(screen.getByText('teto atingido')).toBeInTheDocument();
   });
 });
+
+describe('modelos que responderam (T9 de 2026-11-13-provedor-de-llm-plugavel)', () => {
+  it('mostra_modelos_do_chamado', async () => {
+    const modelos = [
+      { model: 'deepseek-v4-pro', respostas: 5 },
+      { model: 'openrouter:deepseek/deepseek-v4-pro', respostas: 1 },
+    ];
+    montarApi({ items: [chamado({ llm_models: modelos })] });
+    render(<SupportTickets />);
+
+    // Na fila, a coluna "Modelos IA".
+    const linha = (await screen.findByRole('button', { name: '#7' })).closest('tr');
+    expect(within(linha).getByText('openrouter:deepseek/deepseek-v4-pro')).toBeInTheDocument();
+    expect(within(linha).getByText('× 5')).toBeInTheDocument();
+
+    // No detalhe, "Atendido por".
+    await abrirDetalhe();
+    const rotulo = screen.getByText('Atendido por');
+    const valor = rotulo.parentElement;
+    expect(within(valor).getByText('deepseek-v4-pro')).toBeInTheDocument();
+    expect(within(valor).getByText('× 1')).toBeInTheDocument();
+  });
+
+  it('modelos indisponiveis no chamado dizem isso e o detalhe abre', async () => {
+    montarApi({ items: [chamado({ llm_models: null })] });
+    render(<SupportTickets />);
+    await abrirDetalhe();
+    const valor = screen.getByText('Atendido por').parentElement;
+    expect(within(valor).getByTitle('modelos indisponíveis')).toBeInTheDocument();
+    expect(screen.getAllByText('Agora com').length).toBeGreaterThan(1); // coluna + linha do detalhe
+  });
+});

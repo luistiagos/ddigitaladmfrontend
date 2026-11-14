@@ -14,6 +14,7 @@ import api from '@/services/api';
 import { formatUtcDateTime } from '@/utils/format';
 import { getAgentLabel, getSessionKey, downloadJson, exportFilename } from './sessionHelpers';
 import SessionTelemetryModal from './SessionTelemetryModal';
+import LlmModelsCell from './LlmModelsCell';
 
 export default function HistoryModal({ session, agents, anonymizeExport, onClose }) {
   const lid = getSessionKey(session);
@@ -74,6 +75,7 @@ export default function HistoryModal({ session, agents, anonymizeExport, onClose
               <span className="font-mono truncate max-w-[260px]" title={lid}>{lid}</span>
               <span>{session.whatsapp_phone || 'sem telefone'}</span>
               <span>{getAgentLabel(agents, session.current_agent)}</span>
+              <span>Modelos: <LlmModelsCell models={session.llm_models} inline /></span>
             </div>
           </div>
           <div className="flex items-center gap-2">

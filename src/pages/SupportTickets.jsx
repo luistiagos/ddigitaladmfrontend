@@ -24,6 +24,7 @@ import useAdminGrid from '@/utils/useAdminGrid';
 import AgentModal from '@/components/whatsapp/AgentModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
 import LlmCostCell, { textoLlmCost } from '@/components/whatsapp/LlmCostCell';
+import LlmModelsCell, { textoLlmModels } from '@/components/whatsapp/LlmModelsCell';
 import { FALLBACK_AGENTS } from '@/components/whatsapp/sessionHelpers';
 
 const PER_PAGE = 20;
@@ -355,6 +356,14 @@ export default function SupportTickets() {
       csvValue: (row) => textoLlmCost(row.llm_cost),
     },
     {
+      // Sem `sortable` (D5), como o custo.
+      key: 'llm_models',
+      label: 'Modelos IA',
+      className: 'px-4 py-3',
+      render: (row) => <LlmModelsCell models={row.llm_models} />,
+      csvValue: (row) => textoLlmModels(row.llm_models),
+    },
+    {
       key: 'status',
       label: 'Status',
       sortable: true,
@@ -679,7 +688,10 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
   const resumoIndisponivel = ticket ? textoResumo(ticket) : null;
   const motivo = ticket ? textoMotivoReembolso(ticket) : null;
   const reembolsoTicket = ticket ? estadoReembolso(ticket) : null;
-  const sessao = ticket ? { lid: ticket.lid, current_agent: ticket.agente_atual, whatsapp_phone: ticket.telefone } : null;
+  const sessao = ticket ? {
+    lid: ticket.lid, current_agent: ticket.agente_atual, whatsapp_phone: ticket.telefone,
+    llm_models: ticket.llm_models,
+  } : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
@@ -732,6 +744,7 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
                   <span className={ticket.email ? 'text-gray-300' : 'text-gray-500 italic'}>{labelEmail(ticket)}</span>
                 </Linha>
                 <Linha rotulo="Agora com">{ticket.agente_atual || 'Roteamento automático'}</Linha>
+                <Linha rotulo="Atendido por"><LlmModelsCell models={ticket.llm_models} /></Linha>
                 <Linha rotulo="Não tocar">
                   {ticket.nao_tocar === true ? 'Ligado'
                     : ticket.nao_tocar === false ? 'Desligado'

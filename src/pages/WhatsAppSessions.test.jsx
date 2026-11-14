@@ -70,3 +70,38 @@ describe('coluna de custo', () => {
     expect(api.get.mock.calls.length).toBe(antes);
   });
 });
+
+describe('modelos que responderam (T9 de 2026-11-13-provedor-de-llm-plugavel)', () => {
+  it('mostra_modelos_da_sessao', async () => {
+    montarApi([
+      sessao({ llm_models: [
+        { model: 'deepseek-v4-pro', respostas: 12 },
+        { model: 'openrouter:deepseek/deepseek-v4-pro', respostas: 2 },
+      ] }),
+      sessao({ lid: '222@lid', llm_models: [] }),
+      sessao({ lid: '333@lid', llm_models: null }),
+      sessao({ lid: '444@lid' }),
+    ]);
+    render(<WhatsAppSessions />);
+
+    const linha = (await screen.findByText('233753779650648@lid')).closest('tr');
+    expect(within(linha).getByText('deepseek-v4-pro')).toBeInTheDocument();
+    expect(within(linha).getByText('openrouter:deepseek/deepseek-v4-pro')).toBeInTheDocument();
+    expect(within(linha).getByText('× 12')).toBeInTheDocument();
+    expect(within(linha).getByText('× 2')).toBeInTheDocument();
+
+    // Lista vazia e "nenhum"; falha e backend sem o campo sao "indisponivel" (EARS-28), e o
+    // resto da linha carrega.
+    expect(within(screen.getByText('222@lid').closest('tr')).getByText('nenhum')).toBeInTheDocument();
+    for (const lid of ['333@lid', '444@lid']) {
+      const l = screen.getByText(lid).closest('tr');
+      expect(within(l).getByTitle('modelos indisponíveis')).toHaveTextContent('indisponível');
+      expect(within(l).getByText('Histórico')).toBeInTheDocument();
+    }
+
+    // O cabecalho do historico mostra os mesmos modelos, sem pedir nada novo ao servidor.
+    await userEvent.click(within(linha).getByText('Histórico'));
+    expect(await screen.findByText(
+      'deepseek-v4-pro × 12, openrouter:deepseek/deepseek-v4-pro × 2')).toBeInTheDocument();
+  });
+});

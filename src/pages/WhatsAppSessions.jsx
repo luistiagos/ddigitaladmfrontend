@@ -9,6 +9,7 @@ import Field from '@/components/whatsapp/Field';
 import AgentModal from '@/components/whatsapp/AgentModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
 import LlmCostCell, { textoLlmCost } from '@/components/whatsapp/LlmCostCell';
+import LlmModelsCell, { textoLlmModels } from '@/components/whatsapp/LlmModelsCell';
 import { FALLBACK_AGENTS, getAgentLabel, getSessionKey } from '@/components/whatsapp/sessionHelpers';
 
 const PER_PAGE = 20;
@@ -208,6 +209,14 @@ export default function WhatsAppSessions() {
       className: 'px-4 py-3',
       render: (row) => <LlmCostCell cost={row.llm_cost} />,
       csvValue: (row) => textoLlmCost(row.llm_cost),
+    },
+    {
+      // Sem `sortable`, pelo mesmo motivo do custo: so existe para as linhas da pagina.
+      key: 'llm_models',
+      label: 'Modelos IA',
+      className: 'px-4 py-3',
+      render: (row) => <LlmModelsCell models={row.llm_models} />,
+      csvValue: (row) => textoLlmModels(row.llm_models),
     },
     {
       key: 'dont_touch',
