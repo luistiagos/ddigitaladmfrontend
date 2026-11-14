@@ -18,6 +18,7 @@ import {
   Store,
   Package,
   Bot,
+  Cpu,
   MessageCircle,
   MessageSquareQuote,
   LifeBuoy,
@@ -65,6 +66,7 @@ const NAV_GROUPS = [
     label: 'Canais',
     items: [
       { to: '/bot',            label: 'Bot WhatsApp',      icon: Bot },
+      { to: '/modelos-ia',     label: 'Modelos de IA',     icon: Cpu },
       { to: '/whatsapp-sessoes', label: 'Sessões WhatsApp', icon: MessageCircle },
       { to: '/whatsapp-consultas', label: 'Consultas WhatsApp', icon: MessageSquareQuote },
       { to: '/whatsapp-chamados', label: 'Chamados de suporte', icon: LifeBuoy },

@@ -16,6 +16,7 @@ import Transactions from '@/pages/Transactions';
 import Stores from '@/pages/Stores';
 import Products from '@/pages/Products';
 import BotConfig from '@/pages/BotConfig';
+import LlmModels from '@/pages/LlmModels';
 import WhatsAppSessions from '@/pages/WhatsAppSessions';
 import WhatsAppConsults from '@/pages/WhatsAppConsults';
 import SupportTickets from '@/pages/SupportTickets';
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="diagnostico-vendas" element={<SalesDiagnostics />} />
             <Route path="configuracoes" element={<Settings />} />
             <Route path="bot" element={<BotConfig />} />
+            <Route path="modelos-ia" element={<LlmModels />} />
             <Route path="cupons" element={<Coupons />} />
             <Route path="transacoes" element={<Transactions />} />
             <Route path="stores" element={<Stores />} />
