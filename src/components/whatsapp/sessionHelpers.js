@@ -18,6 +18,18 @@ export const FALLBACK_AGENTS = [
   { value: 'OWNER_CONSULT', label: 'Consulta ao dono' },
 ];
 
+export const HUMAN_OR_CONSULT_AGENTS = ['HUMAN_AGENT', 'HUMAN_PENDING', 'OWNER_CONSULT'];
+
+export function getResumeBlockReason({ dontTouch, currentAgent } = {}) {
+  if (dontTouch === true) {
+    return 'Conversa marcada como "Não tocar". Desative a trava antes de retomar a IA.';
+  }
+  if (HUMAN_OR_CONSULT_AGENTS.includes(currentAgent)) {
+    return 'Troque o combo de agente para um agente de IA, Roteador ou Sem agente antes de retomar a conversa.';
+  }
+  return null;
+}
+
 export function getAgentLabel(agents, value) {
   if (!value) return 'Sem agente';
   return agents.find((agent) => agent.value === value)?.label || value;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, History, UserCog, Loader2, MessageCircle, Download, Bell, BellOff } from 'lucide-react';
+import { Search, X, History, UserCog, Loader2, MessageCircle, Download, Bell, BellOff, Play } from 'lucide-react';
 import api from '@/services/api';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { PhoneCell } from '@/components/ui/ContactCell';
@@ -10,7 +10,7 @@ import AgentModal from '@/components/whatsapp/AgentModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
 import LlmCostCell, { textoLlmCost } from '@/components/whatsapp/LlmCostCell';
 import LlmModelsCell, { textoLlmModels } from '@/components/whatsapp/LlmModelsCell';
-import { FALLBACK_AGENTS, getAgentLabel, getSessionKey } from '@/components/whatsapp/sessionHelpers';
+import { FALLBACK_AGENTS, getAgentLabel, getSessionKey, getResumeBlockReason } from '@/components/whatsapp/sessionHelpers';
 
 const PER_PAGE = 20;
 
@@ -36,6 +36,9 @@ export default function WhatsAppSessions() {
   const [historySession, setHistorySession] = useState(null);
   const [agentSession, setAgentSession] = useState(null);
   const [togglingKey, setTogglingKey] = useState('');
+  const [resumingKey, setResumingKey] = useState('');
+  const [resumeNotice, setResumeNotice] = useState('');
+  const [resumeError, setResumeError] = useState('');
 
   const { page, setPage, sortColumn, sortDirection, handleSort } =
     useAdminGrid({ defaultSort: 'last_dttime', defaultDir: 'desc' });
@@ -136,7 +139,8 @@ export default function WhatsAppSessions() {
     if (!lid || togglingKey) return;
     const next = !session.dont_touch;
     setTogglingKey(lid);
-    setError('');
+    setResumeError('');
+    setResumeNotice('');
     try {
       await api.patch(`/admin/wpp/sessions/${encodeURIComponent(lid)}/dont-touch`, {
         active: next,
@@ -148,9 +152,38 @@ export default function WhatsAppSessions() {
         )),
       }));
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao atualizar a flag "não tocar".');
+      setResumeError(err.response?.data?.error || 'Erro ao atualizar a flag "não tocar".');
     } finally {
       setTogglingKey('');
+    }
+  }
+
+  async function handleResumeSession(session) {
+    const lid = getSessionKey(session);
+    if (!lid || resumingKey === lid) return;
+    if (getResumeBlockReason({ dontTouch: !!session.dont_touch, currentAgent: session.current_agent })) {
+      return;
+    }
+    setResumingKey(lid);
+    setResumeError('');
+    setResumeNotice('');
+    try {
+      const res = await api.post(`/admin/wpp/sessions/${encodeURIComponent(lid)}/resume`, {});
+      const nextAgent = res.data?.current_agent;
+      if (nextAgent !== undefined) {
+        setData((prev) => ({
+          ...prev,
+          items: prev.items.map((item) => (
+            getSessionKey(item) === lid ? { ...item, current_agent: nextAgent } : item
+          )),
+        }));
+      }
+      setResumeNotice('IA retomou a conversa e enviou a resposta ao cliente.');
+      fetchSessions();
+    } catch (err) {
+      setResumeError(err.response?.data?.error || 'Erro ao retomar conversa com a IA.');
+    } finally {
+      setResumingKey('');
     }
   }
 
@@ -251,19 +284,39 @@ export default function WhatsAppSessions() {
     },
     {
       key: 'actions',
-      label: 'Histórico',
+      label: 'Ações',
       className: 'px-4 py-3 whitespace-nowrap',
-      render: (row) => (
-        <button
-          type="button"
-          onClick={() => setHistorySession(row)}
-          title="Ver histórico"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs transition-colors"
-        >
-          <History className="h-3.5 w-3.5" />
-          Histórico
-        </button>
-      ),
+      render: (row) => {
+        const lid = getSessionKey(row);
+        const busy = resumingKey === lid;
+        const blockReason = getResumeBlockReason({
+          dontTouch: !!row.dont_touch,
+          currentAgent: row.current_agent,
+        });
+        return (
+          <div className="inline-flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleResumeSession(row)}
+              disabled={busy || !!blockReason}
+              title={blockReason || 'Forçar a IA a retomar a conversa continuando de onde o humano parou'}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {busy ? 'Retomando...' : 'Retomar IA'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistorySession(row)}
+              title="Ver histórico"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs transition-colors"
+            >
+              <History className="h-3.5 w-3.5" />
+              Histórico
+            </button>
+          </div>
+        );
+      },
       csvValue: () => '',
     },
   ];
@@ -355,6 +408,17 @@ export default function WhatsAppSessions() {
         </div>
         {exportError && <p className="text-sm text-red-400 mt-3">{exportError}</p>}
       </form>
+
+      {resumeNotice && (
+        <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-200">
+          {resumeNotice}
+        </div>
+      )}
+      {resumeError && (
+        <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-200">
+          {resumeError}
+        </div>
+      )}
 
       <AdminGrid
         columns={columns}

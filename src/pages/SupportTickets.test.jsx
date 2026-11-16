@@ -683,3 +683,62 @@ describe('modelos que responderam (T9 de 2026-11-13-provedor-de-llm-plugavel)', 
     expect(screen.getAllByText('Agora com').length).toBeGreaterThan(1); // coluna + linha do detalhe
   });
 });
+
+describe('retomada manual do agente no chamado (T2 de 2026-11-15-retomada-manual-do-agente-na-sessao)', () => {
+  it('botao_retomar_ia_no_chamado_dispara_retomada_e_atualiza_detalhe', async () => {
+    montarApi({ items: [chamado({ id: 7, agente_atual: 'MULTIGAMES_AGENT', nao_tocar: false })] });
+    api.post.mockResolvedValueOnce({
+      data: { success: true, current_agent: 'MULTIGAMES_AGENT', blocks_sent: 1, auditoria: true },
+    });
+
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    const botao = screen.getByRole('button', { name: /retomar ia/i });
+    expect(botao).not.toBeDisabled();
+    await userEvent.click(botao);
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/admin/wpp/sessions/111%40lid/resume',
+      { ticket_id: 7 },
+    );
+    expect(await screen.findByText(/IA retomou a conversa/i)).toBeInTheDocument();
+  });
+
+  it('botao_retomar_ia_fica_desabilitado_no_chamado_com_nao_tocar_ativo', async () => {
+    montarApi({ items: [chamado({ id: 7, agente_atual: 'MULTIGAMES_AGENT', nao_tocar: true })] });
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    const botao = screen.getByRole('button', { name: /retomar ia/i });
+    expect(botao).toBeDisabled();
+    expect(botao).toHaveAttribute('title', expect.stringMatching(/Não tocar/i));
+  });
+
+  it('botao_retomar_ia_no_chamado_exige_trocar_agente_antes_quando_humano', async () => {
+    montarApi({ items: [chamado({ id: 7, agente_atual: 'HUMAN_PENDING', nao_tocar: false })] });
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    const botao = screen.getByRole('button', { name: /retomar ia/i });
+    expect(botao).toBeDisabled();
+    expect(botao).toHaveAttribute('title', expect.stringMatching(/Troque o combo/i));
+  });
+
+  it('retomar_ia_no_chamado_mostra_carregamento_e_exibe_aviso_se_falhar', async () => {
+    montarApi({ items: [chamado({ id: 7, agente_atual: 'MULTIGAMES_AGENT', nao_tocar: false })] });
+    let rejectReq;
+    api.post.mockImplementationOnce(() => new Promise((_, rej) => { rejectReq = rej; }));
+
+    render(<SupportTickets />);
+    await abrirDetalhe();
+
+    const botao = screen.getByRole('button', { name: /retomar ia/i });
+    await userEvent.click(botao);
+
+    expect(screen.getByRole('button', { name: /retomando/i })).toBeDisabled();
+    rejectReq({ response: { data: { error: 'Erro ao gerar resposta' } } });
+    expect(await screen.findByText('Erro ao gerar resposta')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retomar ia/i })).not.toBeDisabled();
+  });
+});

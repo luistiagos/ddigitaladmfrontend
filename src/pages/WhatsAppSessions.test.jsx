@@ -105,3 +105,66 @@ describe('modelos que responderam (T9 de 2026-11-13-provedor-de-llm-plugavel)', 
       'deepseek-v4-pro × 12, openrouter:deepseek/deepseek-v4-pro × 2')).toBeInTheDocument();
   });
 });
+
+describe('retomada manual do agente (T2 de 2026-11-15-retomada-manual-do-agente-na-sessao)', () => {
+  it('botao_retomar_ia_dispara_retomada_e_atualiza_sessao', async () => {
+    montarApi([sessao({ current_agent: 'ROUTER_AGENT', dont_touch: false })]);
+    api.post.mockResolvedValueOnce({
+      data: { success: true, current_agent: 'MULTIGAMES_AGENT', blocks_sent: 1 },
+    });
+
+    render(<WhatsAppSessions />);
+    const linha = (await screen.findByText('233753779650648@lid')).closest('tr');
+    const botao = within(linha).getByRole('button', { name: /retomar ia/i });
+    expect(botao).not.toBeDisabled();
+
+    await userEvent.click(botao);
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/admin/wpp/sessions/233753779650648%40lid/resume',
+      {},
+    );
+    expect(await screen.findByText(/IA retomou a conversa/i)).toBeInTheDocument();
+  });
+
+  it('botao_retomar_ia_fica_desabilitado_com_nao_tocar_ativo', async () => {
+    montarApi([sessao({ current_agent: 'XBOX360_AGENT', dont_touch: true })]);
+    render(<WhatsAppSessions />);
+    const linha = (await screen.findByText('233753779650648@lid')).closest('tr');
+    const botao = within(linha).getByRole('button', { name: /retomar ia/i });
+    expect(botao).toBeDisabled();
+    expect(botao).toHaveAttribute('title', expect.stringMatching(/Não tocar/i));
+  });
+
+  it('botao_retomar_ia_exige_trocar_combo_quando_agente_e_humano', async () => {
+    montarApi([
+      sessao({ lid: 'h1@lid', current_agent: 'HUMAN_AGENT', dont_touch: false }),
+      sessao({ lid: 'h2@lid', current_agent: 'HUMAN_PENDING', dont_touch: false }),
+      sessao({ lid: 'h3@lid', current_agent: 'OWNER_CONSULT', dont_touch: false }),
+    ]);
+    render(<WhatsAppSessions />);
+    for (const lid of ['h1@lid', 'h2@lid', 'h3@lid']) {
+      const linha = (await screen.findByText(lid)).closest('tr');
+      const botao = within(linha).getByRole('button', { name: /retomar ia/i });
+      expect(botao).toBeDisabled();
+      expect(botao).toHaveAttribute('title', expect.stringMatching(/Troque o combo/i));
+    }
+  });
+
+  it('retomar_ia_mostra_carregamento_e_exibe_erro_se_falhar', async () => {
+    montarApi([sessao({ current_agent: 'XBOX360_AGENT', dont_touch: false })]);
+    let rejectReq;
+    api.post.mockImplementationOnce(() => new Promise((_, rej) => { rejectReq = rej; }));
+
+    render(<WhatsAppSessions />);
+    const linha = (await screen.findByText('233753779650648@lid')).closest('tr');
+    const botao = within(linha).getByRole('button', { name: /retomar ia/i });
+
+    await userEvent.click(botao);
+    expect(within(linha).getByRole('button', { name: /retomando/i })).toBeDisabled();
+
+    rejectReq({ response: { data: { error: 'Falha simulada no provedor' } } });
+    expect(await screen.findByText('Falha simulada no provedor')).toBeInTheDocument();
+    expect(within(linha).getByRole('button', { name: /retomar ia/i })).not.toBeDisabled();
+  });
+});

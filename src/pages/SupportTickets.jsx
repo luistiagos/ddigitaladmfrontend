@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   LifeBuoy, Search, X, RefreshCw, Loader2, History, MessageCircle, Mail, AlertTriangle,
-  CheckCircle2, Clock, Undo2, Sparkles, UserCog, Bell, BellOff,
+  CheckCircle2, Clock, Undo2, Sparkles, UserCog, Bell, BellOff, Play,
 } from 'lucide-react';
 import api from '@/services/api';
 import AdminGrid from '@/components/ui/AdminGrid';
@@ -25,7 +25,7 @@ import AgentModal from '@/components/whatsapp/AgentModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
 import LlmCostCell, { textoLlmCost } from '@/components/whatsapp/LlmCostCell';
 import LlmModelsCell, { textoLlmModels } from '@/components/whatsapp/LlmModelsCell';
-import { FALLBACK_AGENTS } from '@/components/whatsapp/sessionHelpers';
+import { FALLBACK_AGENTS, getResumeBlockReason } from '@/components/whatsapp/sessionHelpers';
 
 const PER_PAGE = 20;
 
@@ -585,6 +585,7 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
+  const [sucesso, setSucesso] = useState('');
   const [ocupado, setOcupado] = useState('');
   const [agents, setAgents] = useState(FALLBACK_AGENTS);
   const [verConversa, setVerConversa] = useState(false);
@@ -657,6 +658,7 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
     const proximo = !ticket.nao_tocar;
     setOcupado('nao_tocar');
     setAviso('');
+    setSucesso('');
     try {
       // Mesma rota da tela de sessoes (EARS-16): nenhum caminho de escrita proprio. O
       // `ticket_id` diz onde auditar -- neste chamado, mesmo fechado (EARS-16a).
@@ -676,6 +678,36 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
     }
   }
 
+  async function retomarIA() {
+    if (!ticket?.lid || ocupado) return;
+    if (getResumeBlockReason({ dontTouch: ticket.nao_tocar === true, currentAgent: ticket.agente_atual })) {
+      return;
+    }
+    setOcupado('retomar_ia');
+    setAviso('');
+    setSucesso('');
+    try {
+      const res = await api.post(`/admin/wpp/sessions/${encodeURIComponent(ticket.lid)}/resume`, {
+        ticket_id: ticket.id,
+      });
+      const nextAgent = res.data?.current_agent;
+      if (nextAgent !== undefined) {
+        setTicket((t) => ({ ...t, agente_atual: nextAgent }));
+      }
+      if (res.data && res.data.auditoria === false) {
+        setAviso('A IA retomou a conversa, mas o registro nao entrou no historico deste chamado.');
+      } else {
+        setSucesso('IA retomou a conversa e enviou a resposta ao cliente.');
+        await carregarEventos();
+      }
+      onChanged?.();
+    } catch (err) {
+      setAviso(err.response?.data?.error || 'Não foi possível retomar a conversa com a IA.');
+    } finally {
+      setOcupado('');
+    }
+  }
+
   async function carregarEventos() {
     try {
       const evs = await api.get(`/admin/wpp/tickets/${ticketId}/events`);
@@ -688,6 +720,10 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
   const resumoIndisponivel = ticket ? textoResumo(ticket) : null;
   const motivo = ticket ? textoMotivoReembolso(ticket) : null;
   const reembolsoTicket = ticket ? estadoReembolso(ticket) : null;
+  const resumeBlockReason = ticket ? getResumeBlockReason({
+    dontTouch: ticket.nao_tocar === true,
+    currentAgent: ticket.agente_atual,
+  }) : null;
   const sessao = ticket ? {
     lid: ticket.lid, current_agent: ticket.agente_atual, whatsapp_phone: ticket.telefone,
     llm_models: ticket.llm_models,
@@ -731,6 +767,11 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
               {aviso && (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {aviso}
+                </div>
+              )}
+              {sucesso && (
+                <div className="flex items-start gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" /> {sucesso}
                 </div>
               )}
 
@@ -837,6 +878,16 @@ export function TicketDetail({ ticketId, onClose, onChanged }) {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs transition-colors"
             >
               <UserCog className="h-3.5 w-3.5" /> Trocar agente
+            </button>
+            <button
+              type="button"
+              onClick={retomarIA}
+              disabled={!!ocupado || !!resumeBlockReason}
+              title={resumeBlockReason || 'Forçar a IA a retomar a conversa continuando de onde o humano parou'}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {ocupado === 'retomar_ia' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {ocupado === 'retomar_ia' ? 'Retomando...' : 'Retomar IA'}
             </button>
             <button
               type="button"
