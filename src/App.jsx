@@ -29,6 +29,7 @@ import RemarketingWorkflows from '@/pages/RemarketingWorkflows';
 import WhatsAppSenderConfig from '@/pages/WhatsAppSenderConfig';
 import WhatsAppTelemetry from '@/pages/WhatsAppTelemetry';
 import SalesDiagnostics from '@/pages/SalesDiagnostics';
+import AddonsDashboard from '@/pages/AddonsDashboard';
 
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="clientes" element={<Clients />} />
             <Route path="vendas" element={<Sales />} />
+            <Route path="adicionais" element={<AddonsDashboard />} />
             <Route path="disputas" element={<Disputes />} />
             <Route path="leads" element={<Leads />} />
             <Route path="leads/dashboard" element={<LeadsDashboard />} />

@@ -32,6 +32,7 @@ import {
   ShieldAlert,
   Layers,
   TrendingDown,
+  ShoppingBag,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
@@ -45,6 +46,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/clientes',   label: 'Clientes',    icon: Users },
       { to: '/vendas',     label: 'Vendas',       icon: ShoppingCart },
+      { to: '/adicionais', label: 'Adicionais',   icon: ShoppingBag },
       { to: '/transacoes', label: 'Transações',   icon: Receipt },
       { to: '/disputas',   label: 'Disputas',     icon: AlertOctagon },
       { to: '/leads',      label: 'Leads',        icon: Target },
