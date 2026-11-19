@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Search, X, Mail, MessageCircle, Loader2, CreditCard, Facebook, Users, Globe } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
+import OriginBadge, { SALE_ORIGIN_OPTIONS } from '@/components/ui/OriginBadge';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell } from '@/components/ui/ContactCell';
 import useAdminGrid from '@/utils/useAdminGrid';
@@ -40,7 +41,7 @@ function getProvider(row) {
 
 const getEmptyFilters = () => ({
   email: '', phone: '', product_id: '', store_id: '',
-  status: '', provider: '', mpid: '',
+  status: '', provider: '', mpid: '', origin_type: '',
   start_date: todayISO(), end_date: todayISO(),
 });
 
@@ -75,6 +76,7 @@ export default function Sales() {
       if (applied.status) params.set('status', applied.status);
       if (applied.provider) params.set('provider', applied.provider);
       if (applied.mpid) params.set('mpid', applied.mpid);
+      if (applied.origin_type) params.set('origin_type', applied.origin_type);
       if (applied.start_date) params.set('start_date', applied.start_date);
       if (applied.end_date) params.set('end_date', applied.end_date);
       params.set('sort_column', sortColumn);
@@ -173,6 +175,29 @@ export default function Sales() {
       csvValue: r => r.is_facebook ? 'Facebook' : r.is_existing_customer ? 'Cliente' : 'Orgânico',
     },
     {
+      key: 'origin_type', label: 'Composição',
+      render: r => (
+        <div className="flex flex-col gap-0.5">
+          <OriginBadge row={r} />
+          {r.addon_count > 0 && (
+            <span
+              className="text-[11px] text-amber-300/80 truncate max-w-44"
+              title={(r.addon_items || []).map((a) => a.title).join(' + ')}
+            >
+              +{r.addon_count} {r.addon_count === 1 ? 'adicional' : 'adicionais'}
+              {r.addon_items?.length > 0 ? `: ${r.addon_items.map((a) => a.title).join(', ')}` : ''}
+            </span>
+          )}
+        </div>
+      ),
+      csvValue: r => {
+        if (!r.origin_label) return '';
+        const est = r.origin_estimated ? ' (est.)' : '';
+        const addons = r.addon_count > 0 ? ` (+${r.addon_count} adicional)` : '';
+        return `${r.origin_label}${est}${addons}`;
+      },
+    },
+    {
       key: 'provider', label: 'Origem',
       render: r => {
         const p = getProvider(r);
@@ -256,6 +281,15 @@ export default function Sales() {
           >
             <option value="">Todos os providers</option>
             {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+          <select
+            aria-label="Composição ou origem"
+            value={filters.origin_type}
+            onChange={(e) => setFilters((f) => ({ ...f, origin_type: e.target.value }))}
+            className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500"
+          >
+            <option value="">Todas as composições</option>
+            {SALE_ORIGIN_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <input type="date" value={filters.start_date} onChange={(e) => setFilters((f) => ({ ...f, start_date: e.target.value }))}
             className="bg-gray-900 border border-gray-600 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500" />
@@ -378,6 +412,29 @@ function ProviderDetailModal({ row, onClose }) {
               </div>
             ))}
           </dl>
+          {Array.isArray(row.order_items) && row.order_items.length > 1 && (
+            <div className="mt-5 pt-4 border-t border-gray-700">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                Itens do pedido ({row.order_items.length})
+              </div>
+              <ul className="space-y-1.5">
+                {row.order_items.map((item, idx) => (
+                  <li key={item.id ?? `${idx}-${item.title}`} className="flex items-center justify-between text-xs bg-gray-900/60 border border-gray-700/70 rounded-lg px-3 py-2">
+                    <span className="text-gray-200 truncate pr-2">
+                      {idx === 0 && row.origin_type !== 'area_cliente' ? 'Principal: ' : 'Item: '}
+                      {item.title}
+                    </span>
+                    <span className="text-gray-300 whitespace-nowrap">
+                      {item.gross_amount != null ? formatCurrency(item.gross_amount) : '—'}
+                      {item.net_amount != null && (
+                        <span className="text-emerald-400 ml-1.5">({formatCurrency(item.net_amount)} líq.)</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-gray-700 shrink-0 flex justify-end">

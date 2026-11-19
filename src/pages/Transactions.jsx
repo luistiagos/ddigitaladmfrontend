@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Search, X, Eye } from 'lucide-react';
 import api from '@/services/api';
 import Badge, { statusVariant } from '@/components/ui/Badge';
+import OriginBadge, { TX_ORIGIN_OPTIONS } from '@/components/ui/OriginBadge';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { EmailCell, PhoneCell } from '@/components/ui/ContactCell';
 import { formatDateTime, formatCurrency } from '@/utils/format';
@@ -29,7 +30,7 @@ const PAYMENT_TYPES = [
 const EMPTY_FILTERS = {
   email: '', phone: '', product_id: '', status: '',
   store_id: '', start_date: '', end_date: '', payment_type_id: '',
-  mpid: '',
+  mpid: '', origin_type: '',
 };
 
 export default function Transactions() {
@@ -59,6 +60,7 @@ export default function Transactions() {
       if (applied.product_id) params.set('product_id', applied.product_id);
       if (applied.status) params.set('status', applied.status);
       if (applied.payment_type_id) params.set('payment_type_id', applied.payment_type_id);
+      if (applied.origin_type) params.set('origin_type', applied.origin_type);
       if (applied.mpid) params.set('mpid', applied.mpid);
       if (applied.store_id) params.set('store_id', applied.store_id);
       if (applied.start_date) params.set('start_date', applied.start_date);
@@ -94,6 +96,11 @@ export default function Transactions() {
       key: 'title', label: 'Produto', sortable: true,
       render: r => <span className="block max-w-40 truncate" title={r.title || ''}>{r.title || '—'}</span>,
       csvValue: r => r.title ?? '',
+    },
+    {
+      key: 'origin_type', label: 'Tipo / Origem',
+      render: r => <OriginBadge row={r} />,
+      csvValue: r => r.origin_label ? `${r.origin_label}${r.origin_estimated ? ' (est.)' : ''}` : '',
     },
     {
       key: 'value', label: 'Valor', sortable: true, isValueColumn: true,
@@ -209,6 +216,15 @@ export default function Transactions() {
           >
             <option value="">Todos os meios de pagamento</option>
             {PAYMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <select
+            aria-label="Tipo ou origem"
+            value={filters.origin_type}
+            onChange={(e) => setFilters((f) => ({ ...f, origin_type: e.target.value }))}
+            className={SEL_CLS}
+          >
+            <option value="">Todos os tipos / origens</option>
+            {TX_ORIGIN_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <select
             value={filters.store_id}

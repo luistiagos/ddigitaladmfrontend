@@ -159,3 +159,56 @@ describe('Transactions — coluna Banco na grid', () => {
       });
     });
   });
+
+describe('Transactions — papel e origem (EARS-2, EARS-10)', () => {
+  it('renders_origin_badge_and_filter', async () => {
+    const user = userEvent.setup();
+    api.get.mockImplementation(async (url) => {
+      if (url.startsWith('/admin/transactions_all?')) {
+        return {
+          data: {
+            items: [
+              { ...TRANSACOES[0], origin_type: 'principal', origin_label: 'Principal', origin_estimated: false },
+              { ...TRANSACOES[2], origin_type: 'adicional_checkout', origin_label: 'Adicional (Checkout)', origin_estimated: false },
+              {
+                id: 106, email: 'membro@exemplo.com', phone: '11999990006', product_id: 3,
+                title: 'Switch', value: 25.0, datetime: '2026-11-06T18:25:00Z', status: 'approved',
+                origin_type: 'area_cliente', origin_label: 'Área do cliente', origin_estimated: true,
+              },
+              {
+                id: 107, email: 'recompra@exemplo.com', phone: '11999990007', product_id: 1,
+                title: 'Plataforma Completa', value: 39.0, datetime: '2026-11-06T18:30:00Z', status: 'approved',
+                origin_type: 'recompra', origin_label: 'Recompra', origin_estimated: false,
+              },
+            ],
+            total: 4,
+            total_value: 121.0,
+          },
+        };
+      }
+      return { data: { items: [], stores: [] } };
+    });
+
+    render(<Transactions />);
+    const rowBump = (await screen.findByText('cliente.sem_banco@exemplo.com')).closest('tr');
+    expect(rowBump).toHaveTextContent('Adicional (Checkout)');
+
+    const rowArea = screen.getByText('membro@exemplo.com').closest('tr');
+    expect(rowArea).toHaveTextContent('Área do cliente');
+    expect(rowArea).toHaveTextContent('(est.)');
+
+    const rowRecompra = screen.getByText('recompra@exemplo.com').closest('tr');
+    expect(rowRecompra).toHaveTextContent('Recompra');
+
+    const select = screen.getByLabelText('Tipo ou origem');
+    await user.selectOptions(select, 'adicional_checkout');
+    await user.click(screen.getByRole('button', { name: /Buscar/ }));
+
+    await waitFor(() => {
+      const calls = chamadasDeTransacoes();
+      const last = calls[calls.length - 1];
+      const params = new URLSearchParams(last.split('?')[1]);
+      expect(params.get('origin_type')).toBe('adicional_checkout');
+    });
+  });
+});
