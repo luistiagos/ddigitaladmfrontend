@@ -21,6 +21,7 @@ vi.mock('@/services/api', () => ({
 import api from '@/services/api';
 import AgentModal from './AgentModal';
 import HistoryModal from './HistoryModal';
+import ModelModal, { textoModeloSessao } from './ModelModal';
 import { getAgentLabel, getSessionKey, exportFilename, FALLBACK_AGENTS } from './sessionHelpers';
 import { formatUtcDateTime, formatDateTime } from '@/utils/format';
 
@@ -104,5 +105,113 @@ describe('HistoryModal — horário do histórico', () => {
     await waitFor(() => expect(api.get).toHaveBeenCalledWith(
       `/admin/wpp/sessions/${encodeURIComponent('111@lid')}/messages?limit=5000`,
     ));
+  });
+});
+
+// T4 de docs/modules/chatbot-whatsapp/changes/2026-11-19-modelo-de-llm-por-sessao/
+const OPCOES = [
+  { value: '', label: 'Automatico (lista do tipo)', utilizavel: true },
+  { value: 'openrouter:xiaomi/mimo-v2.6-pro', label: 'MiMo', utilizavel: true },
+  { value: 'deepseek-v4-pro', label: 'v4-pro', utilizavel: false },
+];
+const MIMO = 'openrouter:xiaomi/mimo-v2.6-pro';
+const COM_MIMO = { ...SESSAO, session_model_known: true,
+  session_model: { ref: MIMO, label: 'MiMo', existe: true } };
+
+function comOpcoes(models = OPCOES) {
+  api.get.mockImplementation((url) => (url === '/admin/wpp/session-models'
+    ? Promise.resolve({ data: { success: true, models } })
+    : Promise.resolve({ data: {} })));
+}
+
+describe('ModelModal', () => {
+  it('ModelModal lista automatico e cadastro', async () => {
+    comOpcoes();
+    render(<ModelModal session={COM_MIMO} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const select = await screen.findByLabelText('Modelo');
+    const textos = [...select.options].map((o) => o.textContent);
+    expect(textos).toEqual(['Automatico (lista do tipo)', 'MiMo', 'v4-pro — sem chave utilizável']);
+    expect(select).toHaveValue(MIMO);
+    expect(api.get).toHaveBeenCalledWith('/admin/wpp/session-models');
+  });
+
+  it('modelo sem chave utilizavel aparece desabilitado', async () => {
+    comOpcoes();
+    render(<ModelModal session={SESSAO} onClose={vi.fn()} onSaved={vi.fn()} />);
+    const select = await screen.findByLabelText('Modelo');
+    expect(select).toHaveValue('');
+    const [auto, mimo, semChave] = select.options;
+    expect(auto.disabled).toBe(false);
+    expect(mimo.disabled).toBe(false);
+    expect(semChave.disabled).toBe(true);
+  });
+
+  it('modelo atual excluido do cadastro continua visivel como removido', async () => {
+    comOpcoes();
+    const sessao = { ...SESSAO, session_model_known: true,
+      session_model: { ref: 'openrouter:velho/x', label: 'openrouter:velho/x', existe: false } };
+    render(<ModelModal session={sessao} onClose={vi.fn()} onSaved={vi.fn()} />);
+    const select = await screen.findByLabelText('Modelo');
+    expect(select).toHaveValue('openrouter:velho/x');
+    expect(screen.getByRole('option', { name: 'openrouter:velho/x (removido)' })).toBeInTheDocument();
+  });
+
+  it('salvar envia o ref escolhido', async () => {
+    comOpcoes();
+    api.patch.mockResolvedValue({ data: { success: true, model_ref: MIMO, changed: true } });
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+    render(<ModelModal session={SESSAO} onClose={onClose} onSaved={onSaved} />);
+
+    await userEvent.selectOptions(await screen.findByLabelText('Modelo'), MIMO);
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      `/admin/wpp/sessions/${encodeURIComponent('111@lid')}/model`, { model_ref: MIMO }));
+    expect(onSaved).toHaveBeenCalledWith('111@lid', MIMO);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('voltar a Automatico envia vazio', async () => {
+    comOpcoes();
+    api.patch.mockResolvedValue({ data: { success: true, model_ref: null, changed: true } });
+    const onSaved = vi.fn();
+    render(<ModelModal session={COM_MIMO} onClose={vi.fn()} onSaved={onSaved} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Modelo'), '');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      expect.stringContaining('/model'), { model_ref: '' }));
+    expect(onSaved).toHaveBeenCalledWith('111@lid', null);
+  });
+
+  it('erro do backend ao salvar aparece no modal', async () => {
+    comOpcoes();
+    api.patch.mockRejectedValue({ response: { data: { error: 'modelo fora do cadastro' } } });
+    const onClose = vi.fn();
+    render(<ModelModal session={SESSAO} onClose={onClose} onSaved={vi.fn()} />);
+    await screen.findByLabelText('Modelo');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    expect(await screen.findByText('modelo fora do cadastro')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('falha ao carregar as opcoes aparece no modal e bloqueia o salvar', async () => {
+    api.get.mockRejectedValue({ response: { data: {
+      error: 'falha ao ler o cadastro de modelos (OperationalError)' } } });
+    render(<ModelModal session={SESSAO} onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(await screen.findByText('falha ao ler o cadastro de modelos (OperationalError)'))
+      .toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /salvar/i })).toBeDisabled();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it('texto da celula cobre automatico, removido, desconhecido e rotulo', () => {
+    expect(textoModeloSessao({ session_model_known: true, session_model: null })).toBe('Automático');
+    expect(textoModeloSessao({ session_model_known: true,
+      session_model: { ref: 'r', label: 'MiMo', existe: true } })).toBe('MiMo');
+    expect(textoModeloSessao({ session_model_known: true,
+      session_model: { ref: 'r', label: 'r', existe: false } })).toBe('r (removido)');
+    expect(textoModeloSessao({ session_model_known: false, session_model: null })).toBe('?');
+    expect(textoModeloSessao({})).toBe('?');
   });
 });

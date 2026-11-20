@@ -6,7 +6,7 @@
  * Rodar:  npx vitest run src/pages/WhatsAppSessions.test.jsx
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/services/api', () => ({
@@ -166,5 +166,62 @@ describe('retomada manual do agente (T2 de 2026-11-15-retomada-manual-do-agente-
     rejectReq({ response: { data: { error: 'Falha simulada no provedor' } } });
     expect(await screen.findByText('Falha simulada no provedor')).toBeInTheDocument();
     expect(within(linha).getByRole('button', { name: /retomar ia/i })).not.toBeDisabled();
+  });
+});
+
+describe('modelo da sessao (T4 de 2026-11-19-modelo-de-llm-por-sessao)', () => {
+  it('coluna modelo', async () => {
+    montarApi([
+      sessao({ session_model_known: true,
+        session_model: { ref: 'openrouter:xiaomi/mimo-v2.6-pro', label: 'MiMo', existe: true } }),
+      sessao({ lid: '222@lid', session_model_known: true, session_model: null }),
+      sessao({ lid: '333@lid', session_model_known: true,
+        session_model: { ref: 'openrouter:velho/x', label: 'openrouter:velho/x', existe: false } }),
+      sessao({ lid: '444@lid', session_model_known: false, session_model: null }),
+      sessao({ lid: '555@lid' }),
+    ]);
+    render(<WhatsAppSessions />);
+
+    const linha = (await screen.findByText('233753779650648@lid')).closest('tr');
+    expect(within(linha).getByRole('button', { name: 'MiMo' })).toBeInTheDocument();
+    expect(within(screen.getByText('222@lid').closest('tr'))
+      .getByRole('button', { name: 'Automático' })).toBeInTheDocument();
+    expect(within(screen.getByText('333@lid').closest('tr'))
+      .getByRole('button', { name: 'openrouter:velho/x (removido)' })).toBeInTheDocument();
+    // Falha no anexar e backend sem o campo: "?" e o resto da linha carrega.
+    for (const lid of ['444@lid', '555@lid']) {
+      const l = screen.getByText(lid).closest('tr');
+      expect(within(l).getByRole('button', { name: '?' })).toBeInTheDocument();
+      expect(within(l).getByText('Histórico')).toBeInTheDocument();
+    }
+  });
+
+  it('salvar no modal atualiza a coluna e recarrega a grade', async () => {
+    const MIMO = 'openrouter:xiaomi/mimo-v2.6-pro';
+    const items = [sessao({ session_model_known: true, session_model: null })];
+    api.get.mockImplementation((url) => {
+      if (url.startsWith('/admin/wpp/sessions?')) return Promise.resolve({ data: { items, total: 1 } });
+      if (url === '/admin/wpp/session-models') {
+        return Promise.resolve({ data: { success: true, models: [
+          { value: '', label: 'Automatico (lista do tipo)', utilizavel: true },
+          { value: MIMO, label: 'MiMo', utilizavel: true },
+        ] } });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    api.patch.mockResolvedValue({ data: { success: true, model_ref: MIMO, changed: true } });
+    const recargas = () => api.get.mock.calls.filter(([u]) => u.startsWith('/admin/wpp/sessions?')).length;
+
+    render(<WhatsAppSessions />);
+    const linha = (await screen.findByText('233753779650648@lid')).closest('tr');
+    await userEvent.click(within(linha).getByRole('button', { name: 'Automático' }));
+    await userEvent.selectOptions(await screen.findByLabelText('Modelo'), MIMO);
+    const antes = recargas();
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/admin/wpp/sessions/233753779650648%40lid/model', { model_ref: MIMO });
+    await waitFor(() => expect(screen.queryByLabelText('Modelo')).not.toBeInTheDocument());
+    await waitFor(() => expect(recargas()).toBeGreaterThan(antes));
   });
 });

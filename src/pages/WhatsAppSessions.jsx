@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, X, History, UserCog, Loader2, MessageCircle, Download, Bell, BellOff, Play } from 'lucide-react';
+import { Search, X, History, UserCog, Loader2, MessageCircle, Download, Bell, BellOff, Play, Cpu } from 'lucide-react';
 import api from '@/services/api';
 import AdminGrid from '@/components/ui/AdminGrid';
 import { PhoneCell } from '@/components/ui/ContactCell';
@@ -7,6 +7,7 @@ import useAdminGrid from '@/utils/useAdminGrid';
 import { formatDateTime } from '@/utils/format';
 import Field from '@/components/whatsapp/Field';
 import AgentModal from '@/components/whatsapp/AgentModal';
+import ModelModal, { textoModeloSessao } from '@/components/whatsapp/ModelModal';
 import HistoryModal from '@/components/whatsapp/HistoryModal';
 import LlmCostCell, { textoLlmCost } from '@/components/whatsapp/LlmCostCell';
 import LlmModelsCell, { textoLlmModels } from '@/components/whatsapp/LlmModelsCell';
@@ -35,6 +36,7 @@ export default function WhatsAppSessions() {
   const [anonymizeExport, setAnonymizeExport] = useState(true);
   const [historySession, setHistorySession] = useState(null);
   const [agentSession, setAgentSession] = useState(null);
+  const [modelSession, setModelSession] = useState(null);
   const [togglingKey, setTogglingKey] = useState('');
   const [resumingKey, setResumingKey] = useState('');
   const [resumeNotice, setResumeNotice] = useState('');
@@ -129,6 +131,23 @@ export default function WhatsAppSessions() {
       ...prev,
       items: prev.items.map((item) => (
         getSessionKey(item) === lid ? { ...item, current_agent: currentAgent } : item
+      )),
+    }));
+    fetchSessions();
+  }
+
+  function handleModelSaved(lid, modelRef) {
+    // Otimista ate a grade recarregar: o rotulo definitivo (e o "existe") vem do backend.
+    setData((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => (
+        getSessionKey(item) === lid
+          ? {
+            ...item,
+            session_model_known: true,
+            session_model: modelRef ? { ref: modelRef, label: modelRef, existe: true } : null,
+          }
+          : item
       )),
     }));
     fetchSessions();
@@ -233,6 +252,26 @@ export default function WhatsAppSessions() {
         </button>
       ),
       csvValue: (row) => getAgentLabel(agents, row.current_agent),
+    },
+    {
+      // Sem `sortable`: a escolha e anexada so as linhas da pagina, fora do SQL da grade.
+      key: 'session_model',
+      label: 'Modelo',
+      className: 'px-4 py-3 text-gray-300',
+      render: (row) => (
+        <button
+          type="button"
+          onClick={() => setModelSession(row)}
+          title={row.session_model_known === true
+            ? 'Trocar o modelo de IA desta sessão'
+            : 'Escolha de modelo indisponível no momento — clique para tentar trocar'}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-violet-600 text-gray-200 text-xs transition-colors"
+        >
+          <Cpu className="h-3.5 w-3.5" />
+          <span className="max-w-[180px] truncate">{textoModeloSessao(row)}</span>
+        </button>
+      ),
+      csvValue: (row) => textoModeloSessao(row),
     },
     {
       // Sem `sortable`: ordenar por custo exigiria calcular o de todas as conversas, nao so o
@@ -450,6 +489,13 @@ export default function WhatsAppSessions() {
           agents={agents}
           onClose={() => setAgentSession(null)}
           onSaved={handleAgentSaved}
+        />
+      )}
+      {modelSession && (
+        <ModelModal
+          session={modelSession}
+          onClose={() => setModelSession(null)}
+          onSaved={handleModelSaved}
         />
       )}
     </div>
