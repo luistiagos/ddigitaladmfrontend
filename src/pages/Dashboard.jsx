@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert, Store, Percent, Layers, BarChart3 } from 'lucide-react';
+import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert, Store, Percent, Layers, BarChart3, Users, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '@/services/api';
 import { formatCurrency, todayISO } from '@/utils/format';
+import { ERRO_LEAD_UNICO, recorteAusente } from '@/utils/leadUnico';
 
 const FINANCIAL_SERIES = [
   { key: 'approved_total', label: 'Total Bruto', color: '#10b981', bgClass: 'bg-emerald-500' },
@@ -20,6 +21,24 @@ const VOLUME_SERIES = [
   { key: 'reverted_count', label: 'Revertidos / Estornos', color: '#f97316', bgClass: 'bg-orange-500' },
   { key: 'chargeback_count', label: 'Chargebacks', color: '#f43f5e', bgClass: 'bg-rose-500' },
 ];
+
+// Aba "Funil de leads" (EARS-8 da change docs/modules/telemetria/changes/2026-11-21-filtro-lead-unico-nos-dashboards/):
+// chaves do `time_series` diário de /admin/leads/dashboard-stats. Cada contagem é "parou em" (último
+// status da linha; com o filtro, a etapa mais longe da pessoa) e `total` é a soma das cinco etapas.
+// `aproximavel`: topo do funil, marcado "(aproximado)" quando o backend diz `topo_aproximado`.
+const LEAD_SERIES = [
+  { key: 'total', label: 'Entraram na página', color: '#3b82f6', bgClass: 'bg-blue-500', aproximavel: true },
+  { key: 'add_to_cart_count', label: 'Pararam em AddToCart', color: '#a855f7', bgClass: 'bg-purple-500', aproximavel: true },
+  { key: 'lead_count', label: 'Pararam em Lead (contato)', color: '#eab308', bgClass: 'bg-yellow-500' },
+  { key: 'initiate_checkout_count', label: 'Pararam em InitiateCheckout (PIX gerado)', color: '#f97316', bgClass: 'bg-orange-500' },
+  { key: 'purchase_count', label: 'Compraram', color: '#10b981', bgClass: 'bg-emerald-500' },
+];
+
+const SERIES_POR_ABA = { financial: FINANCIAL_SERIES, volumes: VOLUME_SERIES, leads: LEAD_SERIES };
+
+function todasAsSeries(series) {
+  return Object.fromEntries(series.map((s) => [s.key, true]));
+}
 
 const PERIOD_PRESETS = [
   { id: 'today', label: 'Hoje' },
@@ -145,22 +164,14 @@ export default function Dashboard() {
   const [metaOk, setMetaOk] = useState(false);
 
   // Controles do Gráfico Diário
-  const [chartTab, setChartTab] = useState('financial'); // 'financial' | 'volumes'
-  const [visibleFinancial, setVisibleFinancial] = useState({
-    approved_total: true,
-    approved_total_net: true,
-    fb_spend: true,
-    mp_fees_total: true,
-    total_expenses: true,
-    lucro_bruto: true,
-  });
-  const [visibleVolumes, setVisibleVolumes] = useState({
-    approved_count: true,
-    pending_count: true,
-    failed_count: true,
-    reverted_count: true,
-    chargeback_count: true,
-  });
+  const [chartTab, setChartTab] = useState('financial'); // 'financial' | 'volumes' | 'leads'
+  const [visibleFinancial, setVisibleFinancial] = useState(() => todasAsSeries(FINANCIAL_SERIES));
+  const [visibleVolumes, setVisibleVolumes] = useState(() => todasAsSeries(VOLUME_SERIES));
+  const [visibleLeads, setVisibleLeads] = useState(() => todasAsSeries(LEAD_SERIES));
+  // "Só leads únicos" da aba "Funil de leads": começa desligado a cada visita (EARS-9).
+  const [leadUnico, setLeadUnico] = useState(false);
+  // Resposta do funil de leads com a chave (parâmetros) que a pediu: só a do estado atual vira número.
+  const [funilLeads, setFunilLeads] = useState(null);
 
   function handlePresetChange(p) {
     setPreset(p);
@@ -240,6 +251,51 @@ export default function Dashboard() {
   const isStoreDashboard = Boolean(selectedStoreId);
   const isSingleDay = startDate === endDate;
 
+  // Aba "Funil de leads": a MESMA fonte e os MESMOS parâmetros do Dashboard de Leads (dashboard-stats
+  // diário), para as duas telas baterem (verificação (c) da spec). Busca só com a aba aberta.
+  const paramsFunilLeads = useMemo(() => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+      group_by: 'daily',
+      tz_offset_minutes: String(new Date().getTimezoneOffset()),
+    });
+    if (selectedStoreId) params.set('store_id', selectedStoreId);
+    if (leadUnico) params.set('lead_unico', '1');
+    return params.toString();
+  }, [startDate, endDate, selectedStoreId, leadUnico]);
+
+  useEffect(() => {
+    if (chartTab !== 'leads' || isSingleDay) return undefined;
+    let ativo = true;
+    const chave = paramsFunilLeads;
+    api.get(`/admin/leads/dashboard-stats?${chave}`)
+      .then((r) => {
+        if (!ativo) return;
+        const dados = r.data || null;
+        if (recorteAusente(dados, leadUnico)) {
+          setFunilLeads({ chave, erro: ERRO_LEAD_UNICO });
+          return;
+        }
+        setFunilLeads({ chave, dados });
+      })
+      .catch((err) => {
+        if (!ativo) return;
+        setFunilLeads({ chave, erro: err.response?.data?.error || 'Erro ao carregar o funil de leads.' });
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [chartTab, isSingleDay, paramsFunilLeads]);
+
+  // Resposta de outro estado (outro filtro ou período) conta como carregando, nunca como número.
+  const funilLeadsAtual = funilLeads?.chave === paramsFunilLeads ? funilLeads : null;
+  const leadsDailyData = funilLeadsAtual?.dados?.time_series || [];
+  // O backend so manda `lead_unico` com o filtro ligado, e a chave garante que a resposta e do estado
+  // atual: nao ha segunda checagem de `leadUnico` aqui (dono unico).
+  const recorteLeads = funilLeadsAtual?.dados?.lead_unico || null;
+  const topoAproximado = recorteLeads?.topo_aproximado === true;
+
   // Mescla dados diários do banco com gasto diário do Meta Ads
   const combinedDailyData = useMemo(() => {
     const raw = stats?.daily_stats || [];
@@ -260,14 +316,22 @@ export default function Dashboard() {
     });
   }, [stats?.daily_stats, fbDailySpend, metaOk, fbSpend]);
 
-  const activeSeriesMeta = chartTab === 'financial' ? FINANCIAL_SERIES : VOLUME_SERIES;
-  const activeVisibility = chartTab === 'financial' ? visibleFinancial : visibleVolumes;
+  const activeSeriesMeta = SERIES_POR_ABA[chartTab];
+  const [activeVisibility, setActiveVisibility] = {
+    financial: [visibleFinancial, setVisibleFinancial],
+    volumes: [visibleVolumes, setVisibleVolumes],
+    leads: [visibleLeads, setVisibleLeads],
+  }[chartTab];
+  const chartData = chartTab === 'leads' ? leadsDailyData : combinedDailyData;
+  const chartLoading = chartTab === 'leads' ? !funilLeadsAtual : loadingStats;
+  const chartErro = chartTab === 'leads' ? funilLeadsAtual?.erro || '' : '';
+  const rotuloSerie = (s) => (s.aproximavel && topoAproximado ? `${s.label} (aproximado)` : s.label);
 
   const { chartMin, chartMax } = useMemo(() => {
-    if (!combinedDailyData.length) return { chartMin: 0, chartMax: 100 };
+    if (!chartData.length) return { chartMin: 0, chartMax: 100 };
     let max = 0;
     let min = 0;
-    for (const item of combinedDailyData) {
+    for (const item of chartData) {
       for (const s of activeSeriesMeta) {
         if (activeVisibility[s.key]) {
           const val = Number(item[s.key] || 0);
@@ -283,7 +347,7 @@ export default function Dashboard() {
       return { chartMin: bottom, chartMax: Math.max(top, bottom + 10) };
     }
     return { chartMin: 0, chartMax: Math.max(10, Math.ceil(max * 1.2)) };
-  }, [combinedDailyData, activeSeriesMeta, activeVisibility, chartTab]);
+  }, [chartData, activeSeriesMeta, activeVisibility, chartTab]);
 
   const chartRange = Math.max(1, chartMax - chartMin);
   const getY = (val) => 200 - ((val - chartMin) / chartRange) * 180;
@@ -560,7 +624,7 @@ export default function Dashboard() {
                   Evolução Diária
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Acompanhamento cronológico diário de receitas, despesas, lucro e contagens
+                  Acompanhamento cronológico diário de receitas, despesas, lucro, contagens e funil de leads
                 </p>
               </div>
 
@@ -590,6 +654,18 @@ export default function Dashboard() {
                   <Layers className="h-3.5 w-3.5" />
                   Volumes (Qtd)
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setChartTab('leads')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    chartTab === 'leads'
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Funil de leads
+                </button>
               </div>
             </div>
 
@@ -605,13 +681,7 @@ export default function Dashboard() {
                     <button
                       key={s.key}
                       type="button"
-                      onClick={() => {
-                        if (chartTab === 'financial') {
-                          setVisibleFinancial((prev) => ({ ...prev, [s.key]: !prev[s.key] }));
-                        } else {
-                          setVisibleVolumes((prev) => ({ ...prev, [s.key]: !prev[s.key] }));
-                        }
-                      }}
+                      onClick={() => setActiveVisibility((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
                         active
                           ? 'bg-gray-900 border-gray-600 text-gray-200 shadow-sm'
@@ -619,7 +689,7 @@ export default function Dashboard() {
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${s.bgClass}`} />
-                      {s.label}
+                      {rotuloSerie(s)}
                     </button>
                   );
                 })}
@@ -627,38 +697,47 @@ export default function Dashboard() {
 
               <button
                 type="button"
-                onClick={() => {
-                  if (chartTab === 'financial') {
-                    setVisibleFinancial({
-                      approved_total: true,
-                      approved_total_net: true,
-                      fb_spend: true,
-                      mp_fees_total: true,
-                      total_expenses: true,
-                      lucro_bruto: true,
-                    });
-                  } else {
-                    setVisibleVolumes({
-                      approved_count: true,
-                      pending_count: true,
-                      failed_count: true,
-                      reverted_count: true,
-                      chargeback_count: true,
-                    });
-                  }
-                }}
+                onClick={() => setActiveVisibility(todasAsSeries(activeSeriesMeta))}
                 className="text-[11px] text-violet-400 hover:text-violet-300 underline cursor-pointer"
               >
                 Ativar todas as séries
               </button>
             </div>
 
+            {chartTab === 'leads' && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  aria-pressed={leadUnico}
+                  onClick={() => setLeadUnico((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-all cursor-pointer ${
+                    leadUnico
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'bg-gray-900/60 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700/60'
+                  }`}
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  Só leads únicos
+                </button>
+                <span className="text-gray-500">
+                  {recorteLeads
+                    ? `Recorte ativo: só leads únicos · ${Number(recorteLeads.excluidas_compra_anterior || 0).toLocaleString('pt-BR')} excluídas por compra anterior · ${Number(recorteLeads.sem_identificacao || 0).toLocaleString('pt-BR')} linhas sem identificação`
+                    : 'Cada pessoa conta uma vez, na etapa mais longe do período; quem já tinha compra aprovada fica de fora.'}
+                </span>
+              </div>
+            )}
+
             {/* Renderização do Gráfico SVG */}
-            {loadingStats ? (
+            {chartLoading ? (
               <div className="h-64 flex items-center justify-center text-gray-500 text-sm">
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando gráfico...
               </div>
-            ) : !combinedDailyData.length ? (
+            ) : chartErro ? (
+              <div className="h-64 flex items-center justify-center gap-2 text-red-300 text-sm">
+                <AlertCircle className="h-5 w-5 shrink-0 text-red-400" />
+                <span>{chartErro}</span>
+              </div>
+            ) : !chartData.length ? (
               <div className="h-64 flex items-center justify-center text-gray-500 text-sm">
                 Nenhum dado registrado para o período selecionado.
               </div>
@@ -684,8 +763,8 @@ export default function Dashboard() {
                     {/* Linhas das Séries */}
                     {activeSeriesMeta.map((s) => {
                       if (!activeVisibility[s.key]) return null;
-                      const pts = combinedDailyData.map((item, idx) => {
-                        const x = 50 + (idx / Math.max(1, combinedDailyData.length - 1)) * 730;
+                      const pts = chartData.map((item, idx) => {
+                        const x = 50 + (idx / Math.max(1, chartData.length - 1)) * 730;
                         const val = Number(item[s.key] || 0);
                         const y = getY(val);
                         return `${x},${y}`;
@@ -701,8 +780,8 @@ export default function Dashboard() {
                             strokeLinejoin="round"
                             points={pts.join(' ')}
                           />
-                          {combinedDailyData.map((item, idx) => {
-                            const x = 50 + (idx / Math.max(1, combinedDailyData.length - 1)) * 730;
+                          {chartData.map((item, idx) => {
+                            const x = 50 + (idx / Math.max(1, chartData.length - 1)) * 730;
                             const val = Number(item[s.key] || 0);
                             const y = getY(val);
                             const displayVal = chartTab === 'financial' ? formatCurrency(val) : val;
@@ -715,7 +794,7 @@ export default function Dashboard() {
                                 fill={s.color}
                                 className="hover:r-5 transition-all cursor-pointer"
                               >
-                                <title>{`${s.label}: ${displayVal} (${item.label || item.date})`}</title>
+                                <title>{`${rotuloSerie(s)}: ${displayVal} (${item.label || item.date})`}</title>
                               </circle>
                             );
                           })}
@@ -724,10 +803,10 @@ export default function Dashboard() {
                     })}
 
                     {/* Labels do Eixo X */}
-                    {combinedDailyData.map((item, idx) => {
-                      const step = Math.max(1, Math.floor(combinedDailyData.length / 10));
-                      if (idx % step !== 0 && idx !== combinedDailyData.length - 1) return null;
-                      const x = 50 + (idx / Math.max(1, combinedDailyData.length - 1)) * 730;
+                    {chartData.map((item, idx) => {
+                      const step = Math.max(1, Math.floor(chartData.length / 10));
+                      if (idx % step !== 0 && idx !== chartData.length - 1) return null;
+                      const x = 50 + (idx / Math.max(1, chartData.length - 1)) * 730;
                       return (
                         <text key={idx} x={x} y="222" fill="#9ca3af" fontSize="10" textAnchor="middle">
                           {item.label || item.date}

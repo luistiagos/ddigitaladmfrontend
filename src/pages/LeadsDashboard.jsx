@@ -23,11 +23,7 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import { todayISO, formatDate, formatUtcDateTime } from '@/utils/format';
-
-// Filtro "Só leads únicos" (change docs/modules/telemetria/changes/2026-11-21-filtro-lead-unico-nos-dashboards/).
-// Mesmo texto do `lead_unico.ERRO_FILTRO` do backend (corpo do 503): o painel usa-o também quando o
-// backend responde sem o bloco `lead_unico`, para nunca mostrar número sem filtro como filtrado.
-const ERRO_LEAD_UNICO = 'nao foi possivel aplicar o filtro de lead unico';
+import { ERRO_LEAD_UNICO, recorteAusente } from '@/utils/leadUnico';
 
 function formatNumber(num) {
   if (num == null) return '0';
@@ -438,7 +434,7 @@ function FunilCheckout({ startDate, endDate, storeId, stores, recarga, leadUnico
 
   const dados = estado.dados;
   // Com o filtro pedido, só vale a resposta que diz que o aplicou: sem o bloco, o número seria sem filtro.
-  const disponivel = dados?.disponivel === true && (!leadUnico || dados.lead_unico?.ativo === true);
+  const disponivel = dados?.disponivel === true && !recorteAusente(dados, leadUnico);
   const recorteFunil = leadUnico ? dados?.lead_unico : null;
 
   let corpo;
@@ -896,7 +892,7 @@ export default function LeadsDashboard() {
       const res = await api.get(`/admin/leads/dashboard-stats?${params}`);
       if (requisicao !== ultimaRequisicao.current) return;
       const dados = res.data || null;
-      if (leadUnico && dados?.lead_unico?.ativo !== true) {
+      if (recorteAusente(dados, leadUnico)) {
         // Filtro pedido e resposta sem ele: os números seriam os sem filtro (EARS-11).
         setStats(null);
         setError(ERRO_LEAD_UNICO);
