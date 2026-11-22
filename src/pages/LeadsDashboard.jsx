@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Eye,
@@ -23,6 +23,11 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import { todayISO, formatDate, formatUtcDateTime } from '@/utils/format';
+
+// Filtro "Só leads únicos" (change docs/modules/telemetria/changes/2026-11-21-filtro-lead-unico-nos-dashboards/).
+// Mesmo texto do `lead_unico.ERRO_FILTRO` do backend (corpo do 503): o painel usa-o também quando o
+// backend responde sem o bloco `lead_unico`, para nunca mostrar número sem filtro como filtrado.
+const ERRO_LEAD_UNICO = 'nao foi possivel aplicar o filtro de lead unico';
 
 function formatNumber(num) {
   if (num == null) return '0';
@@ -391,7 +396,7 @@ function GraficoSemanalFunil({ serie, meio }) {
   );
 }
 
-function FunilCheckout({ startDate, endDate, storeId, stores, recarga }) {
+function FunilCheckout({ startDate, endDate, storeId, stores, recarga, leadUnico }) {
   const [estado, setEstado] = useState({ carregando: true });
   const [baseInicio, setBaseInicio] = useState('');
   const [baseFim, setBaseFim] = useState('');
@@ -405,6 +410,7 @@ function FunilCheckout({ startDate, endDate, storeId, stores, recarga }) {
     setEstado({ carregando: true });
     const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
     if (storeId) params.set('store_id', storeId);
+    if (leadUnico) params.set('lead_unico', '1');
     if (baseEscolhida) {
       const [ini, fim] = baseEscolhida.split('|');
       params.set('base_start', ini);
@@ -422,7 +428,7 @@ function FunilCheckout({ startDate, endDate, storeId, stores, recarga }) {
     return () => {
       ativo = false;
     };
-  }, [startDate, endDate, storeId, baseEscolhida, recarga]);
+  }, [startDate, endDate, storeId, baseEscolhida, recarga, leadUnico]);
 
   const nomeLoja = (id) => {
     if (id == null) return 'Sem loja';
@@ -431,7 +437,9 @@ function FunilCheckout({ startDate, endDate, storeId, stores, recarga }) {
   };
 
   const dados = estado.dados;
-  const disponivel = dados?.disponivel === true;
+  // Com o filtro pedido, só vale a resposta que diz que o aplicou: sem o bloco, o número seria sem filtro.
+  const disponivel = dados?.disponivel === true && (!leadUnico || dados.lead_unico?.ativo === true);
+  const recorteFunil = leadUnico ? dados?.lead_unico : null;
 
   let corpo;
   if (estado.carregando) {
@@ -477,6 +485,15 @@ function FunilCheckout({ startDate, endDate, storeId, stores, recarga }) {
             {atrasada && <span className="font-semibold">• Coleta atrasada (mais de 1 hora)</span>}
           </div>
         </div>
+
+        {recorteFunil && (
+          <p className="text-xs text-violet-200 bg-violet-950/40 border border-violet-500/40 rounded-lg px-3 py-2">
+            <span className="font-semibold">Só leads únicos:</span>{' '}
+            {formatNumber(recorteFunil.linhas_excluidas)} registros do checkout e{' '}
+            {formatNumber(recorteFunil.tentativas_excluidas)} tentativas de pagamento de quem já tinha comprado antes
+            ficaram de fora (período, base e série).
+          </p>
+        )}
 
         {/* `relative`: sem ele o `sr-only` do cabeçalho (position: absolute) escapa da rolagem
             da tabela e faz a página inteira rolar de lado no celular. */}
@@ -713,6 +730,91 @@ function FragmentoTransicao({ meta, t, expandida, alternar, nomeLoja, desde }) {
   );
 }
 
+function SeloAproximado() {
+  return (
+    <span
+      title="Versão A do filtro: a tabela de leads guarda só o último status e a última data de cada registro, e a visita anônima pode juntar aparelhos pelo IP"
+      className="inline-block mt-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] font-semibold text-amber-300"
+    >
+      aproximado
+    </span>
+  );
+}
+
+const ETAPAS_RECORTE = [
+  { id: 'PageView', label: 'PageView', aproximavel: true },
+  { id: 'AddToCart', label: 'AddToCart', aproximavel: true },
+  { id: 'Lead', label: 'Contato' },
+  { id: 'InitiateCheckout', label: 'Checkout' },
+  { id: 'Purchase', label: 'Compra' },
+];
+
+// Contadores do bloco `lead_unico` (EARS-7, EARS-13): só contagens, nenhum dado pessoal.
+function RecorteLeadUnico({ recorte, comLoja }) {
+  const contadores = [
+    { rotulo: 'Excluídas por compra anterior', valor: recorte.excluidas_compra_anterior, nota: 'pessoas que já tinham pedido aprovado' },
+    ...(comLoja || recorte.excluidas_compra_outra_loja
+      ? [{ rotulo: 'Excluídas por compra em outra loja', valor: recorte.excluidas_compra_outra_loja, nota: 'compraram em outra loja antes ou durante o período' }]
+      : []),
+    { rotulo: 'Linhas sem identificação', valor: recorte.sem_identificacao, nota: 'sem e-mail, telefone nem cookie: contam como lead único' },
+    { rotulo: 'Pagaram depois do período', valor: recorte.pagou_depois, nota: 'contadas na etapa que alcançaram' },
+  ];
+  return (
+    <section
+      aria-label="Recorte só leads únicos"
+      className="bg-violet-950/30 border border-violet-500/40 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4 text-xs"
+    >
+      <div>
+        <h2 className="text-sm font-bold text-violet-200 flex items-center gap-2">
+          <Filter className="h-4 w-4 text-violet-400" />
+          Recorte ativo: só leads únicos
+        </h2>
+        <p className="text-gray-400 mt-0.5">
+          Todos os blocos abaixo contam cada pessoa uma vez, na etapa mais longe que ela alcançou no período.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {contadores.map((c) => (
+          <div key={c.rotulo} data-contador={c.rotulo} className="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+            <div className="text-[11px] font-semibold text-gray-400">{c.rotulo}</div>
+            <div className="text-lg font-black text-white mt-0.5">{formatNumber(c.valor)}</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">{c.nota}</div>
+          </div>
+        ))}
+      </div>
+      <div className="relative w-full overflow-x-auto">
+        <table className="w-full min-w-[480px] text-xs">
+          <thead>
+            <tr className="text-[11px] text-gray-400 uppercase tracking-wider text-left">
+              <th className="py-1.5 pr-3 font-semibold">Etapa</th>
+              <th className="py-1.5 pr-3 font-semibold text-right">Chegaram até ela</th>
+              <th className="py-1.5 font-semibold text-right">Pararam nela</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800 text-gray-300">
+            {ETAPAS_RECORTE.map((e) => (
+              <tr key={e.id} data-etapa-recorte={e.id}>
+                <td className="py-1.5 pr-3">
+                  {e.label}
+                  {e.aproximavel && recorte.topo_aproximado && <span className="text-amber-300"> (aproximado)</span>}
+                </td>
+                <td className="py-1.5 pr-3 text-right font-semibold text-gray-200">{formatNumber(recorte.chegaram?.[e.id])}</td>
+                <td className="py-1.5 text-right">{formatNumber(recorte.pararam?.[e.id])}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {recorte.topo_aproximado && (
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          PageView e AddToCart são aproximados: a tabela de leads guarda só o último status e a última data de cada
+          registro, e uma visita anônima pode juntar aparelhos diferentes pelo IP.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export default function LeadsDashboard() {
   const [preset, setPreset] = useState('this_month');
   const [startDate, setStartDate] = useState(() => getPresetDates('this_month').start);
@@ -725,6 +827,12 @@ export default function LeadsDashboard() {
   const [error, setError] = useState('');
   // "Atualizar" também recarrega o bloco do funil do checkout, que tem fetch próprio.
   const [recargaFunil, setRecargaFunil] = useState(0);
+  // "Só leads únicos": começa desligado a cada visita (spec, superfícies); vai como `lead_unico=1`
+  // em dashboard-stats e checkout-funnel.
+  const [leadUnico, setLeadUnico] = useState(false);
+  // Só a resposta da última requisição entra na tela: uma resposta atrasada do estado anterior
+  // (ex.: sem filtro) não pode cair por cima da do filtro ligado.
+  const ultimaRequisicao = useRef(0);
 
   // Chart view mode: 'rates' (Taxas de Conversão %) | 'volumes' (Volume dos Estágios)
   const [chartTab, setChartTab] = useState('rates');
@@ -771,6 +879,7 @@ export default function LeadsDashboard() {
 
   // Fetch dashboard stats
   const fetchStats = async () => {
+    const requisicao = ++ultimaRequisicao.current;
     setLoading(true);
     setError('');
     try {
@@ -783,18 +892,30 @@ export default function LeadsDashboard() {
       if (selectedStoreId) {
         params.set('store_id', selectedStoreId);
       }
+      if (leadUnico) params.set('lead_unico', '1');
       const res = await api.get(`/admin/leads/dashboard-stats?${params}`);
-      setStats(res.data || null);
+      if (requisicao !== ultimaRequisicao.current) return;
+      const dados = res.data || null;
+      if (leadUnico && dados?.lead_unico?.ativo !== true) {
+        // Filtro pedido e resposta sem ele: os números seriam os sem filtro (EARS-11).
+        setStats(null);
+        setError(ERRO_LEAD_UNICO);
+        return;
+      }
+      setStats(dados);
     } catch (err) {
+      if (requisicao !== ultimaRequisicao.current) return;
+      // Sem os números anteriores: eram de outro estado (outro filtro ou período).
+      setStats(null);
       setError(err.response?.data?.error || 'Erro ao carregar métricas do dashboard.');
     } finally {
-      setLoading(false);
+      if (requisicao === ultimaRequisicao.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchStats();
-  }, [startDate, endDate, selectedStoreId, groupBy]);
+  }, [startDate, endDate, selectedStoreId, groupBy, leadUnico]);
 
   function handlePresetChange(p) {
     setPreset(p);
@@ -834,6 +955,14 @@ export default function LeadsDashboard() {
     overall_conversion_pct: 0,
   };
 
+  // Número na tela só com a resposta do estado atual; carregando ou em erro, "—".
+  const semNumero = loading || !stats;
+  // Bloco `lead_unico` da resposta (design P1): o recorte e o "aproximado" vêm do backend. Resposta
+  // filtrada sem `ativo` já foi recusada em `fetchStats` (dono único da checagem). Ao desligar, o
+  // recorte some na hora, sem esperar a resposta nova.
+  const recorte = leadUnico ? stats?.lead_unico || null : null;
+  const topoAproximado = recorte?.topo_aproximado === true;
+
   const timeSeries = stats?.time_series || [];
   const storeList = stats?.by_store || [];
   const remarketing = stats?.remarketing_summary || {
@@ -849,6 +978,7 @@ export default function LeadsDashboard() {
   const funnelSteps = [
     {
       id: 'PageView',
+      aproximado: topoAproximado,
       label: '1. Visualizações',
       sublabel: 'Acesso à página',
       count: funnel.pageview_count,
@@ -861,6 +991,7 @@ export default function LeadsDashboard() {
     },
     {
       id: 'AddToCart',
+      aproximado: topoAproximado,
       label: '2. Interesse na Oferta',
       sublabel: 'Clique em Comprar',
       count: funnel.add_to_cart_count,
@@ -912,8 +1043,8 @@ export default function LeadsDashboard() {
   ];
 
   const seriesMeta = [
-    { key: 'PageView', label: 'PageView', color: '#3b82f6', bgClass: 'bg-blue-500' },
-    { key: 'AddToCart', label: 'AddToCart', color: '#a855f7', bgClass: 'bg-purple-500' },
+    { key: 'PageView', label: topoAproximado ? 'PageView (aproximado)' : 'PageView', color: '#3b82f6', bgClass: 'bg-blue-500' },
+    { key: 'AddToCart', label: topoAproximado ? 'AddToCart (aproximado)' : 'AddToCart', color: '#a855f7', bgClass: 'bg-purple-500' },
     { key: 'Lead', label: 'Lead (Contatos)', color: '#06b6d4', bgClass: 'bg-cyan-500' },
     { key: 'InitiateCheckout', label: 'Checkout', color: '#f59e0b', bgClass: 'bg-amber-500' },
     { key: 'Purchase', label: 'Purchase', color: '#10b981', bgClass: 'bg-emerald-500' },
@@ -1123,7 +1254,28 @@ export default function LeadsDashboard() {
             </div>
           </div>
         </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-3 border-t border-gray-700/50 text-xs">
+          <button
+            type="button"
+            aria-pressed={leadUnico}
+            onClick={() => setLeadUnico((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-all ${
+              leadUnico
+                ? 'bg-violet-600 text-white shadow-sm'
+                : 'bg-gray-900/60 text-gray-400 hover:bg-gray-700 hover:text-gray-200 border border-gray-700/60'
+            }`}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Só leads únicos
+          </button>
+          <span className="text-gray-500">
+            Cada pessoa conta uma vez, na etapa mais longe do período; quem já tinha compra aprovada fica de fora.
+          </span>
+        </div>
       </div>
+
+      {recorte && <RecorteLeadUnico recorte={recorte} comLoja={Boolean(selectedStoreId)} />}
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3 text-red-300 text-sm">
@@ -1135,7 +1287,7 @@ export default function LeadsDashboard() {
       {/* Top Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {/* 1. PageView */}
-        <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
+        <div data-card="PageView" className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">PageView</span>
             <span className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
@@ -1144,14 +1296,15 @@ export default function LeadsDashboard() {
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-extrabold text-white">
-              {loading ? '—' : formatNumber(funnel.pageview_count)}
+              {semNumero ? '—' : formatNumber(funnel.pageview_count)}
             </div>
             <p className="text-[11px] text-gray-400 mt-1">Acessos à página</p>
+            {topoAproximado && <SeloAproximado />}
           </div>
         </div>
 
         {/* 2. AddToCart */}
-        <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
+        <div data-card="AddToCart" className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">AddToCart</span>
             <span className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
@@ -1160,16 +1313,17 @@ export default function LeadsDashboard() {
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-extrabold text-white">
-              {loading ? '—' : formatNumber(funnel.add_to_cart_count)}
+              {semNumero ? '—' : formatNumber(funnel.add_to_cart_count)}
             </div>
             <p className="text-[11px] text-purple-400 font-medium mt-1">
-              {loading ? '—' : `${rates.pageview_to_cart_pct}% dos acessos`}
+              {semNumero ? '—' : `${rates.pageview_to_cart_pct}% dos acessos`}
             </p>
+            {topoAproximado && <SeloAproximado />}
           </div>
         </div>
 
         {/* 3. Contatos Capturados (Lead Total) */}
-        <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
+        <div data-card="Contatos" className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Contatos</span>
             <span className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
@@ -1178,16 +1332,16 @@ export default function LeadsDashboard() {
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-extrabold text-white">
-              {loading ? '—' : formatNumber(funnel.total_captured_contacts)}
+              {semNumero ? '—' : formatNumber(funnel.total_captured_contacts)}
             </div>
             <p className="text-[11px] text-cyan-400 font-medium mt-1">
-              {loading ? '—' : `${rates.cart_to_lead_pct}% de AddToCart`}
+              {semNumero ? '—' : `${rates.cart_to_lead_pct}% de AddToCart`}
             </p>
           </div>
         </div>
 
         {/* 4. InitiateCheckout (Total Checkouts) */}
-        <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
+        <div data-card="Checkout" className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Checkout</span>
             <span className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
@@ -1196,18 +1350,18 @@ export default function LeadsDashboard() {
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-extrabold text-white">
-              {loading
+              {semNumero
                 ? '—'
                 : formatNumber(funnel.total_initiated_checkout ?? (funnel.initiate_checkout_count + funnel.purchase_count))}
             </div>
             <p className="text-[11px] text-amber-400 font-medium mt-1">
-              {loading ? '—' : `${rates.lead_to_initiate_pct}% dos contatos`}
+              {semNumero ? '—' : `${rates.lead_to_initiate_pct}% dos contatos`}
             </p>
           </div>
         </div>
 
         {/* 5. Purchase */}
-        <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
+        <div data-card="Purchase" className="bg-gray-800/60 border border-gray-700/80 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Purchase</span>
             <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
@@ -1216,10 +1370,10 @@ export default function LeadsDashboard() {
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-extrabold text-white">
-              {loading ? '—' : formatNumber(funnel.purchase_count)}
+              {semNumero ? '—' : formatNumber(funnel.purchase_count)}
             </div>
             <p className="text-[11px] text-emerald-400 font-medium mt-1">
-              {loading ? '—' : `${rates.initiate_to_purchase_pct}% pagamentos aprovados`}
+              {semNumero ? '—' : `${rates.initiate_to_purchase_pct}% pagamentos aprovados`}
             </p>
           </div>
         </div>
@@ -1234,10 +1388,10 @@ export default function LeadsDashboard() {
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-extrabold text-violet-200">
-              {loading ? '—' : `${rates.overall_conversion_pct}%`}
+              {semNumero ? '—' : `${rates.overall_conversion_pct}%`}
             </div>
             <p className="text-[11px] text-gray-300 mt-1">
-              {loading ? '—' : `${formatNumber(funnel.total_captured_contacts)} contatos no total`}
+              {semNumero ? '—' : `${formatNumber(funnel.total_captured_contacts)} contatos no total`}
             </p>
           </div>
         </div>
@@ -1275,7 +1429,7 @@ export default function LeadsDashboard() {
             const shareOfTop = funnel.pageview_count > 0 ? ((step.count / baseVol) * 100).toFixed(1) : '0';
 
             return (
-              <div key={step.id} className="flex flex-col relative group">
+              <div key={step.id} data-etapa={step.id} className="flex flex-col relative group">
                 <div
                   className={`bg-gray-900/80 border rounded-2xl p-4 flex flex-col justify-between h-full transition-all hover:border-gray-500/50 ${step.bgColor}`}
                 >
@@ -1285,15 +1439,16 @@ export default function LeadsDashboard() {
                       <Icon className="h-4 w-4 shrink-0" />
                     </div>
                     <div className="text-2xl font-black text-white tracking-tight">
-                      {loading ? '—' : formatNumber(step.count)}
+                      {semNumero ? '—' : formatNumber(step.count)}
                     </div>
                     <div className="text-[11px] text-gray-400 mt-0.5">{step.sublabel}</div>
+                    {step.aproximado && <SeloAproximado />}
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-gray-800">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-gray-500">Do topo:</span>
-                      <span className="font-bold text-gray-200">{loading ? '—' : `${shareOfTop}%`}</span>
+                      <span className="font-bold text-gray-200">{semNumero ? '—' : `${shareOfTop}%`}</span>
                     </div>
 
                     {/* Stage volume progress bar */}
@@ -1311,7 +1466,7 @@ export default function LeadsDashboard() {
                   <div className="my-2 md:my-0 md:absolute md:-right-3 md:top-1/2 md:-translate-y-1/2 z-10 flex md:flex-col items-center justify-center">
                     <div className="bg-gray-950 border border-gray-700 px-2 py-1 rounded-lg text-[10px] font-bold shadow-md flex items-center gap-1">
                       <span className="text-emerald-400">
-                        {loading ? '—' : `${step.nextRate}%`}
+                        {semNumero ? '—' : `${step.nextRate}%`}
                       </span>
                       <ArrowRight className="h-3 w-3 text-gray-500 hidden md:inline" />
                     </div>
@@ -1343,7 +1498,7 @@ export default function LeadsDashboard() {
               <span className="text-[10px] text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver gráfico →</span>
             </div>
             <div className="text-base sm:text-lg font-black text-purple-300 mt-0.5">
-              {loading ? '—' : `${rates.pageview_to_cart_pct}%`}
+              {semNumero ? '—' : `${rates.pageview_to_cart_pct}%`}
             </div>
             <span className="text-[10px] text-gray-500 block mt-0.5">PageView ➔ AddToCart</span>
           </button>
@@ -1367,7 +1522,7 @@ export default function LeadsDashboard() {
               <span className="text-[10px] text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver gráfico →</span>
             </div>
             <div className="text-base sm:text-lg font-black text-cyan-300 mt-0.5">
-              {loading ? '—' : `${rates.cart_to_lead_pct}%`}
+              {semNumero ? '—' : `${rates.cart_to_lead_pct}%`}
             </div>
             <span className="text-[10px] text-gray-500 block mt-0.5">AddToCart ➔ Lead</span>
           </button>
@@ -1391,7 +1546,7 @@ export default function LeadsDashboard() {
               <span className="text-[10px] text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver gráfico →</span>
             </div>
             <div className="text-base sm:text-lg font-black text-amber-300 mt-0.5">
-              {loading ? '—' : `${rates.lead_to_initiate_pct}%`}
+              {semNumero ? '—' : `${rates.lead_to_initiate_pct}%`}
             </div>
             <span className="text-[10px] text-gray-500 block mt-0.5">Lead ➔ InitiateCheckout</span>
           </button>
@@ -1415,7 +1570,7 @@ export default function LeadsDashboard() {
               <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver gráfico →</span>
             </div>
             <div className="text-base sm:text-lg font-black text-emerald-300 mt-0.5">
-              {loading ? '—' : `${rates.initiate_to_purchase_pct}%`}
+              {semNumero ? '—' : `${rates.initiate_to_purchase_pct}%`}
             </div>
             <span className="text-[10px] text-gray-500 block mt-0.5">InitiateCheckout ➔ Purchase</span>
           </button>
@@ -1430,6 +1585,7 @@ export default function LeadsDashboard() {
         storeId={selectedStoreId}
         stores={stores}
         recarga={recargaFunil}
+        leadUnico={leadUnico}
       />
 
       {/* Time Series Evolution Chart */}
@@ -1936,7 +2092,7 @@ export default function LeadsDashboard() {
                   <span className="w-2 h-2 rounded-full bg-violet-500" /> Total de Workflows
                 </span>
                 <span className="font-bold text-white text-sm">
-                  {loading ? '—' : formatNumber(remarketing.total_workflows)}
+                  {semNumero ? '—' : formatNumber(remarketing.total_workflows)}
                 </span>
               </div>
 
@@ -1945,7 +2101,7 @@ export default function LeadsDashboard() {
                   <span className="w-2 h-2 rounded-full bg-emerald-500" /> Comprados (Purchased)
                 </span>
                 <span className="font-bold text-emerald-400 text-sm">
-                  {loading ? '—' : formatNumber(remarketing.purchased)}
+                  {semNumero ? '—' : formatNumber(remarketing.purchased)}
                 </span>
               </div>
 
@@ -1954,7 +2110,7 @@ export default function LeadsDashboard() {
                   <span className="w-2 h-2 rounded-full bg-blue-500" /> Concluídos (Completed)
                 </span>
                 <span className="font-bold text-blue-400 text-sm">
-                  {loading ? '—' : formatNumber(remarketing.completed)}
+                  {semNumero ? '—' : formatNumber(remarketing.completed)}
                 </span>
               </div>
 
@@ -1963,7 +2119,7 @@ export default function LeadsDashboard() {
                   <span className="w-2 h-2 rounded-full bg-amber-500" /> Em Espera / Janela
                 </span>
                 <span className="font-bold text-amber-400 text-sm">
-                  {loading ? '—' : formatNumber(remarketing.waiting)}
+                  {semNumero ? '—' : formatNumber(remarketing.waiting)}
                 </span>
               </div>
 
@@ -1972,7 +2128,7 @@ export default function LeadsDashboard() {
                   <span className="w-2 h-2 rounded-full bg-red-500" /> Falhas / Erros
                 </span>
                 <span className="font-bold text-red-400 text-sm">
-                  {loading ? '—' : formatNumber(remarketing.failed)}
+                  {semNumero ? '—' : formatNumber(remarketing.failed)}
                 </span>
               </div>
             </div>

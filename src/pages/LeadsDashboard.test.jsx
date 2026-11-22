@@ -526,3 +526,267 @@ describe('LeadsDashboard — Média Móvel no Gráfico', () => {
     expect(screen.queryByText(/• Média Móvel/i)).not.toBeInTheDocument();
   });
 });
+
+// Filtro "Só leads únicos" (T4). Forma do bloco `lead_unico` conferida em lead_unico.py::calcular e
+// do 503 em adminapi.py::admin_leads_dashboard_stats (backend 541707d); a do checkout-funnel em
+// checkout_funnel.py::bloco (`lead_unico {ativo, linhas_excluidas, tentativas_excluidas}`).
+// Change: docs/modules/telemetria/changes/2026-11-21-filtro-lead-unico-nos-dashboards/ (T4).
+const ERRO_FILTRO = 'nao foi possivel aplicar o filtro de lead unico';
+
+function statsSemFiltro() {
+  const stats = statsCom(origemComVendas);
+  stats.time_series = [{ period: '2026-11-04', label: '04/11', pageview_to_cart_pct: 40, initiate_to_purchase_pct: 65.2 }];
+  stats.by_store = [{
+    store_id: 600007, store_name: 'Xbox 360', pageview_count: 900, add_to_cart_count: 300, total_captured_contacts: 200,
+    total_initiated_checkout: 150, purchase_count: 100, checkout_to_purchase_pct: 66.7, overall_conversion_pct: 11.1,
+  }];
+  stats.remarketing_summary = { total_workflows: 672, completed: 10, purchased: 20, active: 0, waiting: 30, failed: 1 };
+  return stats;
+}
+
+function blocoLeadUnico(sobrescreve = {}) {
+  return {
+    ativo: true,
+    pararam: { PageView: 444, AddToCart: 200, Lead: 21, InitiateCheckout: 11, Purchase: 111 },
+    chegaram: { PageView: 787, AddToCart: 343, Lead: 143, InitiateCheckout: 122, Purchase: 111 },
+    excluidas_compra_anterior: 41,
+    excluidas_compra_outra_loja: 0,
+    sem_identificacao: 1234,
+    pagou_depois: 7,
+    topo_aproximado: true,
+    ...sobrescreve,
+  };
+}
+
+function statsFiltrado(lu = blocoLeadUnico()) {
+  return {
+    funnel_summary: {
+      pageview_count: 777, add_to_cart_count: 333, lead_count: 44, initiate_checkout_count: 22, purchase_count: 111,
+      total_captured_contacts: 177, total_initiated_checkout: 133, total_interactions: 1287,
+    },
+    rates: {
+      pageview_to_cart_pct: 42.9, cart_to_lead_pct: 53.2, lead_to_initiate_pct: 75.1,
+      initiate_to_purchase_pct: 83.5, cart_to_purchase_pct: 33.3, overall_conversion_pct: 14.3,
+    },
+    time_series: [{ period: '2026-11-05', label: '05/11', pageview_to_cart_pct: 42.9, initiate_to_purchase_pct: 83.5 }],
+    by_store: [{
+      store_id: 600007, store_name: 'Xbox 360', pageview_count: 555, add_to_cart_count: 250, total_captured_contacts: 120,
+      total_initiated_checkout: 90, purchase_count: 80, checkout_to_purchase_pct: 88.9, overall_conversion_pct: 14.4,
+    }],
+    remarketing_summary: { total_workflows: 345, completed: 5, purchased: 9, active: 0, waiting: 12, failed: 0 },
+    origem_vendas: { ...origemComVendas, total_compradores: 99 },
+    lead_unico: lu,
+  };
+}
+
+function funilFiltrado() {
+  const f = funilOk({ lead_unico: { ativo: true, linhas_excluidas: 3, tentativas_excluidas: 2 } });
+  f.transicoes[1] = { ...f.transicoes[1], periodo: lado(40, 50) };
+  return f;
+}
+
+const comFiltro = (url) => new URLSearchParams(url.split('?')[1]).get('lead_unico') === '1';
+const urlsDe = (prefixo) => api.get.mock.calls.map(([u]) => u).filter((u) => u.startsWith(prefixo));
+
+// `stats`/`funil`: (url) => Promise, para o teste decidir a resposta de cada estado do filtro.
+function mockLeadUnico({ stats, funil }) {
+  api.get.mockImplementation((url) => {
+    if (url.startsWith('/admin/stores')) return Promise.resolve({ data: { stores: LOJAS } });
+    if (url.startsWith('/admin/leads/dashboard-stats')) return stats(url);
+    if (url.startsWith('/admin/leads/checkout-funnel')) return funil(url);
+    return Promise.reject(new Error(`URL inesperada: ${url}`));
+  });
+}
+
+const respostaPadrao = {
+  stats: (url) => Promise.resolve({ data: comFiltro(url) ? statsFiltrado() : statsSemFiltro() }),
+  funil: (url) => Promise.resolve({ data: comFiltro(url) ? funilFiltrado() : funilOk() }),
+};
+
+const card = (id) => document.querySelector(`[data-card="${id}"]`);
+const etapa = (id) => document.querySelector(`[data-etapa="${id}"]`);
+const botaoFiltro = () => screen.getByRole('button', { name: 'Só leads únicos' });
+const blocoFunil = () => screen.getByRole('region', { name: 'Onde o checkout perde a venda' });
+const titulosDoGrafico = () => [...document.querySelectorAll('circle > title')].map((t) => t.textContent);
+const linhaDaLoja = (nome) => {
+  const linhas = screen.getAllByText(nome).map((el) => el.closest('tr')).filter(Boolean);
+  expect(linhas).toHaveLength(1);
+  return linhas[0];
+};
+
+async function renderLeadUnico(respostas = respostaPadrao) {
+  mockLeadUnico(respostas);
+  render(
+    <MemoryRouter>
+      <LeadsDashboard />
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(card('PageView')).not.toHaveTextContent('—'));
+  await waitFor(() => expect(within(blocoFunil()).queryByText('Carregando...')).not.toBeInTheDocument());
+}
+
+async function ligarFiltro() {
+  await userEvent.click(botaoFiltro());
+  await screen.findByRole('region', { name: 'Recorte só leads únicos' });
+  await waitFor(() => expect(within(blocoFunil()).queryByText('Carregando...')).not.toBeInTheDocument());
+}
+
+describe('LeadsDashboard — Só leads únicos (T4)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('lead_unico_recarrega_todos_os_blocos', async () => {
+    await renderLeadUnico();
+
+    // Começa desligado: nenhuma chamada com o parâmetro, nenhum recorte na tela.
+    expect(botaoFiltro()).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('region', { name: 'Recorte só leads únicos' })).not.toBeInTheDocument();
+    expect([...urlsDe('/admin/leads/dashboard-stats'), ...urlsDe('/admin/leads/checkout-funnel')].some(comFiltro)).toBe(false);
+    expect(card('PageView')).toHaveTextContent('1.000');
+
+    await ligarFiltro();
+    expect(botaoFiltro()).toHaveAttribute('aria-pressed', 'true');
+    expect(comFiltro(urlsDe('/admin/leads/dashboard-stats').at(-1))).toBe(true);
+    expect(comFiltro(urlsDe('/admin/leads/checkout-funnel').at(-1))).toBe(true);
+
+    // Os 7 blocos com os números filtrados.
+    expect(card('PageView')).toHaveTextContent('777'); // cards do funil
+    expect(etapa('Purchase')).toHaveTextContent('111');
+    expect(etapa('InitiateCheckout')).toHaveTextContent('133');
+    expect(screen.getAllByText('83.5%').length).toBeGreaterThan(0); // taxas de transição
+    expect(screen.queryByText('65.2%')).not.toBeInTheDocument();
+    expect(titulosDoGrafico().some((t) => t.includes('(05/11)'))).toBe(true); // gráfico temporal
+    expect(titulosDoGrafico().some((t) => t.includes('(04/11)'))).toBe(false);
+    expect(linhaDaLoja('Xbox 360')).toHaveTextContent('555'); // por loja
+    expect(linhaDaLoja('Xbox 360')).not.toHaveTextContent('900');
+    expect(screen.getByText('345')).toBeInTheDocument(); // remarketing
+    expect(screen.queryByText('672')).not.toBeInTheDocument();
+    const origem = screen.getByRole('region', { name: 'Origem das vendas' });
+    expect(within(origem).getByText('Compradores do período').nextSibling).toHaveTextContent('99'); // origem
+    expect(linhaDe(blocoFunil(), 'Preencheu contato ➔ gerou pagamento')).toHaveTextContent('80,0% (40/50)'); // checkout
+    expect(blocoFunil()).toHaveTextContent('3 registros do checkout e 2 tentativas de pagamento');
+
+    // Desliga: volta sem o parâmetro e sem o recorte.
+    await userEvent.click(botaoFiltro());
+    await waitFor(() => expect(card('PageView')).toHaveTextContent('1.000'));
+    expect(screen.queryByRole('region', { name: 'Recorte só leads únicos' })).not.toBeInTheDocument();
+    expect(comFiltro(urlsDe('/admin/leads/dashboard-stats').at(-1))).toBe(false);
+    expect(comFiltro(urlsDe('/admin/leads/checkout-funnel').at(-1))).toBe(false);
+    await waitFor(() => expect(linhaDe(blocoFunil(), 'Preencheu contato ➔ gerou pagamento')).toHaveTextContent('73,3% (151/206)'));
+    expect(blocoFunil()).not.toHaveTextContent('Só leads únicos');
+  });
+
+  it('topo_do_funil_marcado_aproximado', async () => {
+    await renderLeadUnico();
+    expect(document.body).not.toHaveTextContent('aproximado');
+
+    await ligarFiltro();
+    for (const id of ['PageView', 'AddToCart']) {
+      expect(card(id)).toHaveTextContent('aproximado');
+      expect(etapa(id)).toHaveTextContent('aproximado');
+    }
+    for (const id of ['Contatos', 'Checkout', 'Purchase']) expect(card(id)).not.toHaveTextContent('aproximado');
+    for (const id of ['Lead', 'InitiateCheckout', 'Purchase']) expect(etapa(id)).not.toHaveTextContent('aproximado');
+    cleanup();
+    vi.clearAllMocks();
+
+    // Quem decide é o backend: com `topo_aproximado: false` (versão B), nenhuma marca.
+    await renderLeadUnico({
+      ...respostaPadrao,
+      stats: (url) => Promise.resolve({
+        data: comFiltro(url) ? statsFiltrado(blocoLeadUnico({ topo_aproximado: false })) : statsSemFiltro(),
+      }),
+    });
+    await ligarFiltro();
+    expect(card('PageView')).toHaveTextContent('777');
+    expect(document.body).not.toHaveTextContent('aproximado');
+  });
+
+  it('contadores do recorte', async () => {
+    await renderLeadUnico();
+    await ligarFiltro();
+    const recorte = screen.getByRole('region', { name: 'Recorte só leads únicos' });
+    const contador = (rotulo) => recorte.querySelector(`[data-contador="${rotulo}"]`);
+
+    expect(recorte).toHaveTextContent('Recorte ativo: só leads únicos');
+    expect(contador('Excluídas por compra anterior')).toHaveTextContent('41');
+    expect(contador('Linhas sem identificação')).toHaveTextContent('1.234');
+    expect(contador('Pagaram depois do período')).toHaveTextContent('7');
+    // Todas as lojas: o contador de outra loja é sempre 0 e não aparece.
+    expect(contador('Excluídas por compra em outra loja')).toBeNull();
+    const linha = (id) => recorte.querySelector(`[data-etapa-recorte="${id}"]`);
+    expect(linha('PageView')).toHaveTextContent('787');
+    expect(linha('PageView')).toHaveTextContent('444');
+    expect(linha('Lead')).toHaveTextContent('143');
+    expect(linha('Lead')).toHaveTextContent('21');
+    cleanup();
+    vi.clearAllMocks();
+
+    // Com loja escolhida, aparece, inclusive com 0.
+    await renderLeadUnico();
+    await userEvent.selectOptions(screen.getByDisplayValue('Todas as Lojas (Consolidado)'), '600007');
+    await ligarFiltro();
+    expect(new URLSearchParams(urlsDe('/admin/leads/dashboard-stats').at(-1).split('?')[1]).get('store_id')).toBe('600007');
+    const comLoja = screen.getByRole('region', { name: 'Recorte só leads únicos' });
+    expect(comLoja.querySelector('[data-contador="Excluídas por compra em outra loja"]')).toHaveTextContent('0');
+  });
+
+  it('erro do filtro aparece e nenhum numero fica na tela', async () => {
+    const falhas = [
+      // 503 do backend (EARS-11).
+      () => Promise.reject(Object.assign(new Error('503'), { response: { status: 503, data: { error: ERRO_FILTRO } } })),
+      // 200 sem o bloco `lead_unico` (backend antigo): os números seriam os sem filtro.
+      () => Promise.resolve({ data: statsSemFiltro() }),
+    ];
+    for (const falha of falhas) {
+      await renderLeadUnico({
+        stats: (url) => (comFiltro(url) ? falha() : Promise.resolve({ data: statsSemFiltro() })),
+        // Funil sem o bloco do filtro também não pode passar por filtrado.
+        funil: () => Promise.resolve({ data: funilOk() }),
+      });
+      expect(card('PageView')).toHaveTextContent('1.000');
+
+      await userEvent.click(botaoFiltro());
+      expect(await screen.findByText(ERRO_FILTRO)).toBeInTheDocument();
+      await waitFor(() => expect(card('PageView')).toHaveTextContent('—'));
+      for (const id of ['PageView', 'AddToCart', 'Contatos', 'Checkout', 'Purchase']) {
+        expect(card(id)).not.toHaveTextContent(/\d/);
+      }
+      expect(screen.queryAllByText('1.000')).toHaveLength(0);
+      expect(screen.queryByText('672')).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Recorte só leads únicos' })).not.toBeInTheDocument();
+      expect(await within(blocoFunil()).findByText('Funil do checkout indisponível')).toBeInTheDocument();
+      expect(blocoFunil()).not.toHaveTextContent(/\d/);
+
+      cleanup();
+      vi.clearAllMocks();
+    }
+  });
+
+  it('resposta atrasada do estado anterior e descartada', async () => {
+    let soltarSemFiltro;
+    mockLeadUnico({
+      ...respostaPadrao,
+      stats: (url) => (comFiltro(url)
+        ? Promise.resolve({ data: statsFiltrado() })
+        : new Promise((resolve) => { soltarSemFiltro = () => resolve({ data: statsSemFiltro() }); })),
+    });
+    render(
+      <MemoryRouter>
+        <LeadsDashboard />
+      </MemoryRouter>,
+    );
+
+    // Liga antes de a primeira resposta (sem filtro) chegar.
+    await userEvent.click(botaoFiltro());
+    await screen.findByRole('region', { name: 'Recorte só leads únicos' });
+    expect(card('PageView')).toHaveTextContent('777');
+
+    soltarSemFiltro();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(card('PageView')).toHaveTextContent('777');
+    expect(card('PageView')).not.toHaveTextContent('1.000');
+    expect(screen.getByRole('region', { name: 'Recorte só leads únicos' })).toBeInTheDocument();
+  });
+});
