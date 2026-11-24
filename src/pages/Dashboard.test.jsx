@@ -275,7 +275,8 @@ describe('Dashboard — aba "Funil de leads" (T5)', () => {
     vi.clearAllMocks();
   });
 
-  it('aba_funil_de_leads_mostra_etapas_por_dia (EARS-8): séries por etapa e por dia, da mesma fonte do Dashboard de Leads', async () => {
+  // EARS-8: séries por etapa e por dia, da mesma fonte do Dashboard de Leads.
+  it('aba_funil_de_leads_mostra_etapas_por_dia', async () => {
     setupLeads({ stats: { ...mockStats, stores_with_sales: [{ store_id: 7, store_name: 'Loja PS2', count: 1, total: 1 }] } });
     const user = userEvent.setup();
     const { container } = render(<MemoryRouter><Dashboard /></MemoryRouter>);
@@ -335,7 +336,8 @@ describe('Dashboard — aba "Funil de leads" (T5)', () => {
     expect(chamadasLeads()).toHaveLength(antes);
   });
 
-  it('lead_unico_no_grafico_principal (EARS-9): o botão manda lead_unico=1 e as séries passam a ser as do filtro', async () => {
+  // EARS-9: o botão manda lead_unico=1 e as séries passam a ser as do filtro.
+  it('lead_unico_no_grafico_principal', async () => {
     setupLeads();
     const user = userEvent.setup();
     const { container } = render(<MemoryRouter><Dashboard /></MemoryRouter>);
