@@ -34,7 +34,15 @@ const LEAD_SERIES = [
   { key: 'purchase_count', label: 'Compraram', color: '#10b981', bgClass: 'bg-emerald-500' },
 ];
 
-const SERIES_POR_ABA = { financial: FINANCIAL_SERIES, volumes: VOLUME_SERIES, leads: LEAD_SERIES };
+// Aba "PIX pago (%)" (T4 da change docs/modules/telemetria/changes/2026-11-24-taxa-de-pix-pago-de-leads-novos/):
+// as duas taxas de cada dia de `por_dia`, a MESMA resposta do cartão. `key` aponta o bloco
+// `{num, den, pct}` do dia, e não um número: o ponto é o `pct`, e o `pct` nulo não tem ponto.
+const PIX_SERIES = [
+  { key: 'por_pix', label: 'Pago por PIX', color: '#10b981', bgClass: 'bg-emerald-500' },
+  { key: 'por_lead', label: 'Pago por lead', color: '#3b82f6', bgClass: 'bg-blue-500' },
+];
+
+const SERIES_POR_ABA = { financial: FINANCIAL_SERIES, volumes: VOLUME_SERIES, leads: LEAD_SERIES, pix: PIX_SERIES };
 
 function todasAsSeries(series) {
   return Object.fromEntries(series.map((s) => [s.key, true]));
@@ -157,6 +165,17 @@ const contagem = (n) => Number(n || 0).toLocaleString('pt-BR');
 // `pct` vem do backend com 1 casa, ou `null` com den 0, que vira "—" e nunca 0% (EARS-14).
 const taxa = (t) => (t?.pct == null ? '—' : `${Number(t.pct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`);
 
+// `por_dia` da porta 1 -> pontos da aba "PIX pago (%)". Rótulo `DD/MM` recortado do texto `AAAA-MM-DD`
+// (sem `Date`, sem fuso). Lista ausente ou dia sem bloco vira lista vazia ou dia sem ponto, nunca
+// exceção: uma exceção no render derrubaria a tela inteira (EARS-17).
+function diasPix(porDia) {
+  if (!Array.isArray(porDia)) return [];
+  return porDia.map((d) => {
+    const dia = String(d?.dia ?? '');
+    return { date: dia, label: `${dia.slice(8, 10)}/${dia.slice(5, 7)}`, por_pix: d?.por_pix, por_lead: d?.por_lead };
+  });
+}
+
 // `estado`: null = carregando; `{erro}`; `{dados}` = resposta da porta 1 do design, já do período e da
 // loja atuais. Mostra o `total` (a soma dos dias, para bater com a aba do gráfico).
 function PixLeadsNovos({ estado }) {
@@ -223,10 +242,11 @@ export default function Dashboard() {
   const [metaOk, setMetaOk] = useState(false);
 
   // Controles do Gráfico Diário
-  const [chartTab, setChartTab] = useState('financial'); // 'financial' | 'volumes' | 'leads'
+  const [chartTab, setChartTab] = useState('financial'); // 'financial' | 'volumes' | 'leads' | 'pix'
   const [visibleFinancial, setVisibleFinancial] = useState(() => todasAsSeries(FINANCIAL_SERIES));
   const [visibleVolumes, setVisibleVolumes] = useState(() => todasAsSeries(VOLUME_SERIES));
   const [visibleLeads, setVisibleLeads] = useState(() => todasAsSeries(LEAD_SERIES));
+  const [visiblePix, setVisiblePix] = useState(() => todasAsSeries(PIX_SERIES));
   // "Só leads únicos" da aba "Funil de leads": começa desligado a cada visita (EARS-9).
   const [leadUnico, setLeadUnico] = useState(false);
   // Resposta do funil de leads com a chave (parâmetros) que a pediu: só a do estado atual vira número.
@@ -406,18 +426,42 @@ export default function Dashboard() {
     });
   }, [stats?.daily_stats, fbDailySpend, metaOk, fbSpend]);
 
+  // Aba "PIX pago (%)": os dias da MESMA resposta do cartão (sem segunda busca), então o carregando e
+  // o erro dela são os do cartão (EARS-16).
+  const pixDailyData = useMemo(() => diasPix(pixLeadsAtual?.dados?.por_dia), [pixLeadsAtual]);
+
   const activeSeriesMeta = SERIES_POR_ABA[chartTab];
   const [activeVisibility, setActiveVisibility] = {
     financial: [visibleFinancial, setVisibleFinancial],
     volumes: [visibleVolumes, setVisibleVolumes],
     leads: [visibleLeads, setVisibleLeads],
+    pix: [visiblePix, setVisiblePix],
   }[chartTab];
-  const chartData = chartTab === 'leads' ? leadsDailyData : combinedDailyData;
-  const chartLoading = chartTab === 'leads' ? !funilLeadsAtual : loadingStats;
-  const chartErro = chartTab === 'leads' ? funilLeadsAtual?.erro || '' : '';
+  // [dados, carregando, erro] de cada aba; Financeiro e Volumes leem o /admin/dashboard.
+  const [chartData, chartLoading, chartErro] = {
+    leads: [leadsDailyData, !funilLeadsAtual, funilLeadsAtual?.erro || ''],
+    pix: [pixDailyData, !pixLeadsAtual, pixLeadsAtual?.erro || ''],
+  }[chartTab] || [combinedDailyData, loadingStats, ''];
   const rotuloSerie = (s) => (s.aproximavel && topoAproximado ? `${s.label} (aproximado)` : s.label);
+  // Valor do ponto. Na aba de PIX, `pct` nulo (dia sem PIX contado) é `null`: sem ponto, e a linha se
+  // quebra ali (EARS-13). Nas outras abas, vazio continua 0, como sempre foi.
+  const valorDoPonto = (item, s) => {
+    if (chartTab !== 'pix') return Number(item[s.key] || 0);
+    const pct = item[s.key]?.pct;
+    return pct == null ? null : Number(pct);
+  };
+  const textoDoPonto = (item, s, val) => {
+    if (chartTab === 'pix') {
+      const t = item[s.key];
+      return `${s.label}: ${taxa(t)} (${contagem(t.num)} de ${contagem(t.den)}) (${item.label})`;
+    }
+    const displayVal = chartTab === 'financial' ? formatCurrency(val) : val;
+    return `${rotuloSerie(s)}: ${displayVal} (${item.label || item.date})`;
+  };
 
   const { chartMin, chartMax } = useMemo(() => {
+    // Taxa: eixo fixo de 0 a 100%, para 60% e 62% não parecerem um tombo.
+    if (chartTab === 'pix') return { chartMin: 0, chartMax: 100 };
     if (!chartData.length) return { chartMin: 0, chartMax: 100 };
     let max = 0;
     let min = 0;
@@ -713,7 +757,9 @@ export default function Dashboard() {
         <div className="mt-8 space-y-6">
           {/* Card do Gráfico */}
           <div className="bg-gray-800/70 border border-gray-700/80 rounded-2xl p-5 shadow-lg space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Com 4 abas, título e abas só dividem a linha a partir de xl: abaixo disso a barra roubava a
+                largura do título e quebrava o texto dentro dos botões. */}
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <TrendingUp className="h-5 w-5 text-violet-400" />
@@ -725,11 +771,11 @@ export default function Dashboard() {
               </div>
 
               {/* Alternador de Modo (Financeiro vs Volumes) */}
-              <div className="flex items-center bg-gray-900/90 p-1 rounded-xl border border-gray-700/70 self-start sm:self-auto">
+              <div className="flex flex-wrap items-center bg-gray-900/90 p-1 rounded-xl border border-gray-700/70 self-start xl:self-auto xl:shrink-0">
                 <button
                   type="button"
                   onClick={() => setChartTab('financial')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                     chartTab === 'financial'
                       ? 'bg-violet-600 text-white shadow-sm'
                       : 'text-gray-400 hover:text-gray-200'
@@ -741,7 +787,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setChartTab('volumes')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                     chartTab === 'volumes'
                       ? 'bg-violet-600 text-white shadow-sm'
                       : 'text-gray-400 hover:text-gray-200'
@@ -753,7 +799,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setChartTab('leads')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                     chartTab === 'leads'
                       ? 'bg-violet-600 text-white shadow-sm'
                       : 'text-gray-400 hover:text-gray-200'
@@ -761,6 +807,18 @@ export default function Dashboard() {
                 >
                   <Users className="h-3.5 w-3.5" />
                   Funil de leads
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartTab('pix')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    chartTab === 'pix'
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <Percent className="h-3.5 w-3.5" />
+                  PIX pago (%)
                 </button>
               </div>
             </div>
@@ -823,6 +881,12 @@ export default function Dashboard() {
               </div>
             )}
 
+            {chartTab === 'pix' && (
+              <p className="text-xs text-gray-500">
+                Só PIX de leads novos, pelo dia da geração; dia sem PIX contado fica sem ponto.
+              </p>
+            )}
+
             {/* Renderização do Gráfico SVG */}
             {chartLoading ? (
               <div className="h-64 flex items-center justify-center text-gray-500 text-sm">
@@ -845,7 +909,9 @@ export default function Dashboard() {
                     {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
                       const y = 200 - pct * 180;
                       const val = chartMin + pct * chartRange;
-                      const formattedVal = chartTab === 'financial' ? formatCurrency(val) : Math.round(val);
+                      const formattedVal = chartTab === 'financial'
+                        ? formatCurrency(val)
+                        : chartTab === 'pix' ? `${Math.round(val)}%` : Math.round(val);
                       return (
                         <g key={i}>
                           <line x1="45" y1={y} x2="790" y2={y} stroke="#374151" strokeDasharray="3 3" strokeWidth="1" />
@@ -859,38 +925,48 @@ export default function Dashboard() {
                     {/* Linhas das Séries */}
                     {activeSeriesMeta.map((s) => {
                       if (!activeVisibility[s.key]) return null;
-                      const pts = chartData.map((item, idx) => {
-                        const x = 50 + (idx / Math.max(1, chartData.length - 1)) * 730;
-                        const val = Number(item[s.key] || 0);
-                        const y = getY(val);
-                        return `${x},${y}`;
+                      const xDoDia = (idx) => 50 + (idx / Math.max(1, chartData.length - 1)) * 730;
+                      // Um valor nulo fecha o segmento: a linha se quebra no dia sem valor. Só a aba de
+                      // PIX tem nulo; nas outras sai um segmento só, com os mesmos pontos de sempre.
+                      const segmentos = [];
+                      let atual = [];
+                      chartData.forEach((item, idx) => {
+                        const val = valorDoPonto(item, s);
+                        if (val === null) {
+                          if (atual.length) segmentos.push(atual);
+                          atual = [];
+                          return;
+                        }
+                        atual.push(`${xDoDia(idx)},${getY(val)}`);
                       });
+                      if (atual.length) segmentos.push(atual);
 
                       return (
                         <g key={s.key}>
-                          <polyline
-                            fill="none"
-                            stroke={s.color}
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            points={pts.join(' ')}
-                          />
+                          {segmentos.map((pts, i) => (
+                            <polyline
+                              key={i}
+                              fill="none"
+                              stroke={s.color}
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              points={pts.join(' ')}
+                            />
+                          ))}
                           {chartData.map((item, idx) => {
-                            const x = 50 + (idx / Math.max(1, chartData.length - 1)) * 730;
-                            const val = Number(item[s.key] || 0);
-                            const y = getY(val);
-                            const displayVal = chartTab === 'financial' ? formatCurrency(val) : val;
+                            const val = valorDoPonto(item, s);
+                            if (val === null) return null;
                             return (
                               <circle
                                 key={idx}
-                                cx={x}
-                                cy={y}
+                                cx={xDoDia(idx)}
+                                cy={getY(val)}
                                 r="3.5"
                                 fill={s.color}
                                 className="hover:r-5 transition-all cursor-pointer"
                               >
-                                <title>{`${rotuloSerie(s)}: ${displayVal} (${item.label || item.date})`}</title>
+                                <title>{textoDoPonto(item, s, val)}</title>
                               </circle>
                             );
                           })}

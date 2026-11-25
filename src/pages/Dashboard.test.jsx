@@ -548,7 +548,7 @@ describe('Dashboard — cartão "PIX de leads novos" (T3)', () => {
   });
 
   // EARS-16: rota fora (backend antigo), `disponivel: false`, 400 ou resposta sem o bloco: a mensagem
-  // fixa, sem número e sem o motivo técnico.
+  // fixa, sem número e sem o motivo técnico — no cartão e na aba "PIX pago (%)" do gráfico (T4).
   it('pix_leads_novos_erro_sem_numero', async () => {
     for (const falha of [
       () => Promise.reject({ response: { status: 404, data: {} } }),
@@ -559,11 +559,22 @@ describe('Dashboard — cartão "PIX de leads novos" (T3)', () => {
       cleanup();
       vi.clearAllMocks();
       setupMocks({ pix: falha });
-      render(<MemoryRouter><Dashboard /></MemoryRouter>);
+      const user = userEvent.setup();
+      const { container } = render(<MemoryRouter><Dashboard /></MemoryRouter>);
 
       await waitFor(() => expect(within(secaoPix()).getByText(ERRO_PIX)).toBeInTheDocument());
       expect(secaoPix().textContent).not.toMatch(/\d/);
       expect(secaoPix().textContent).not.toMatch(/OperationalError|invalida/);
+
+      // A aba do gráfico mostra a mesma mensagem, sem ponto e sem dígito.
+      await abrirPeriodo('2026-11-10', '2026-11-11');
+      await user.click(screen.getByRole('button', { name: /PIX pago \(%\)/ }));
+      await waitFor(() => expect(screen.getAllByText(ERRO_PIX)).toHaveLength(2));
+      const noGrafico = screen.getAllByText(ERRO_PIX).find((el) => !secaoPix().contains(el));
+      expect(noGrafico.parentElement.textContent).not.toMatch(/\d/);
+      expect(noGrafico.parentElement.textContent).not.toMatch(/OperationalError|invalida/);
+      expect(pontos(container)).toHaveLength(0);
+      expect(container.querySelector('svg[aria-label="Evolução Diária"]')).toBeNull();
     }
   });
 
@@ -644,5 +655,147 @@ describe('Dashboard — cartão "PIX de leads novos" (T3)', () => {
     fireEvent.change(inputs[1], { target: { value: '2026-11-12' } });
     await waitFor(() => expect(secaoPix().querySelectorAll('.animate-pulse')).toHaveLength(2));
     expect(secaoPix().textContent).not.toMatch(/\d/);
+  });
+});
+
+// Aba "PIX pago (%)" do gráfico "Evolução Diária" (T4 da mesma change): desenha `por_dia` da MESMA
+// resposta do cartão.
+async function abrirPeriodo(inicio, fim) {
+  const inputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+  fireEvent.change(inputs[0], { target: { value: inicio } });
+  fireEvent.change(inputs[1], { target: { value: fim } });
+  await waitFor(() => expect(screen.getByText(/Evolução Diária/i)).toBeInTheDocument());
+}
+
+const abaPix = () => screen.getByRole('button', { name: /PIX pago \(%\)/ });
+const grafico = (container) => container.querySelector('svg[aria-label="Evolução Diária"]');
+const linhasDaCor = (container, cor) => Array.from(grafico(container).querySelectorAll('polyline'))
+  .filter((l) => l.getAttribute('stroke') === cor)
+  .map((l) => l.getAttribute('points').split(' '));
+
+describe('Dashboard — aba "PIX pago (%)" do gráfico (T4)', () => {
+  beforeEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  // EARS-11: as duas taxas de cada dia, com "N de M" de cada ponto, num eixo fixo de 0 a 100%.
+  it('aba_pix_leads_novos_mostra_taxa_por_dia', async () => {
+    setupMocks({ pix: (url) => (url.includes('end_date=2026-11-12') ? new Promise(() => {}) : pixMedido) });
+    const user = userEvent.setup();
+    const { container } = render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    await abrirPeriodo('2026-11-10', '2026-11-11');
+    await waitFor(() => expect(within(secaoPix()).getByText('60%')).toBeInTheDocument());
+    const buscas = chamadasPix().length;
+
+    await user.click(abaPix());
+    await waitFor(() => expect(pontos(container)).toContain('Pago por PIX: 62% (62 de 100) (11/11)'));
+    expect([...pontos(container)].sort()).toEqual([
+      'Pago por PIX: 58,8% (100 de 170) (10/11)',
+      'Pago por PIX: 62% (62 de 100) (11/11)',
+      'Pago por lead: 71,4% (100 de 140) (10/11)',
+      'Pago por lead: 76,7% (69 de 90) (11/11)',
+    ]);
+    // A mesma resposta do cartão: abrir a aba não busca de novo.
+    expect(chamadasPix()).toHaveLength(buscas);
+    expect(screen.getByRole('button', { name: 'Pago por PIX' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pago por lead' })).toBeInTheDocument();
+
+    // Eixo fixo: 0% a 100%, e o ponto de 62% na altura de 62% (o eixo pelo máximo o poria no topo).
+    const textos = Array.from(grafico(container).querySelectorAll('text')).map((t) => t.textContent);
+    expect(textos).toEqual(expect.arrayContaining(['0%', '25%', '50%', '75%', '100%', '10/11', '11/11']));
+    const ponto62 = Array.from(grafico(container).querySelectorAll('circle'))
+      .find((c) => c.querySelector('title').textContent.startsWith('Pago por PIX: 62%'));
+    expect(Number(ponto62.getAttribute('cy'))).toBeCloseTo(200 - 0.62 * 180, 5);
+    // Sem dia vazio: uma linha por série, com os dois dias.
+    expect(linhasDaCor(container, '#10b981').map((l) => l.length)).toEqual([2]);
+    expect(linhasDaCor(container, '#3b82f6').map((l) => l.length)).toEqual([2]);
+
+    // Financeiro volta como sempre, sem a taxa e sem "%" no eixo.
+    await user.click(screen.getByRole('button', { name: /Financeiro \(R\$\)/i }));
+    await waitFor(() => expect(pontos(container).some((t) => t.startsWith('Total Bruto:') && t.endsWith('(01/11)'))).toBe(true));
+    expect(pontos(container).some((t) => t.startsWith('Pago por'))).toBe(false);
+    expect(Array.from(grafico(container).querySelectorAll('text')).some((t) => t.textContent.endsWith('%'))).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Pago por PIX' })).not.toBeInTheDocument();
+
+    // De volta à aba, sem busca nova.
+    await user.click(abaPix());
+    await waitFor(() => expect(pontos(container)).toHaveLength(4));
+    expect(chamadasPix()).toHaveLength(buscas);
+
+    // Período novo ainda sem resposta: os pontos do anterior saem na hora e a aba fica carregando
+    // pelo estado da taxa, e não pelo /admin/dashboard: com os cartões de Vendas já de volta, ela segue
+    // carregando.
+    fireEvent.change(screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/)[1], { target: { value: '2026-11-12' } });
+    await waitFor(() => expect(within(screen.getByText('Vendas Aprovadas').closest('.rounded-xl')).getByText('15')).toBeInTheDocument());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByText(/Carregando gráfico/)).toBeInTheDocument();
+    expect(pontos(container)).toHaveLength(0);
+  });
+
+  // EARS-12: um dia só mostra o cartão e nenhum gráfico da taxa.
+  it('pix_leads_novos_um_dia_so_cartao_sem_grafico', async () => {
+    setupMocks({ pix: pixMedido });
+    const user = userEvent.setup();
+    const { container } = render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    // "Hoje": cartão com o número, sem gráfico e sem o botão da aba.
+    await waitFor(() => expect(within(secaoPix()).getByText('60%')).toBeInTheDocument());
+    expect(screen.queryByText(/Evolução Diária/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /PIX pago \(%\)/ })).not.toBeInTheDocument();
+    expect(pontos(container)).toHaveLength(0);
+
+    // Vindo de 2 dias com a aba aberta: o gráfico some e o cartão fica.
+    await abrirPeriodo('2026-11-10', '2026-11-11');
+    await user.click(abaPix());
+    await waitFor(() => expect(pontos(container)).toHaveLength(4));
+    fireEvent.change(screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/)[1], { target: { value: '2026-11-10' } });
+    await waitFor(() => expect(screen.queryByText(/Evolução Diária/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(within(secaoPix()).getByText('60%')).toBeInTheDocument());
+    expect(pontos(container)).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /PIX pago \(%\)/ })).not.toBeInTheDocument();
+  });
+
+  // EARS-13: dia sem PIX contado fica sem ponto, nunca 0%, e a linha se quebra nele. O 0% de verdade
+  // (0 de 5) continua sendo ponto.
+  it('aba_pix_leads_novos_dia_sem_pix_sem_ponto', async () => {
+    const quatroDias = respostaPixOk({
+      inicio: '2026-11-10',
+      fim: '2026-11-13',
+      total: blocoPix({ pix: [8, 19], lead: [4, 12], aguardando: [3, 3] }),
+      porDia: [
+        { dia: '2026-11-10', ...blocoPix({ pix: [5, 10], lead: [4, 8] }) },
+        { dia: '2026-11-11', ...blocoPix({ aguardando: [2, 2] }) },
+        { dia: '2026-11-12', ...blocoPix({ pix: [3, 4], aguardando: [1, 1] }) },
+        { dia: '2026-11-13', ...blocoPix({ pix: [0, 5], lead: [0, 4] }) },
+      ],
+    });
+    setupMocks({ pix: quatroDias });
+    const user = userEvent.setup();
+    const { container } = render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    await abrirPeriodo('2026-11-10', '2026-11-13');
+    await user.click(abaPix());
+    await waitFor(() => expect(pontos(container)).toHaveLength(5));
+
+    expect([...pontos(container)].sort()).toEqual([
+      'Pago por PIX: 0% (0 de 5) (13/11)',
+      'Pago por PIX: 50% (5 de 10) (10/11)',
+      'Pago por PIX: 75% (3 de 4) (12/11)',
+      'Pago por lead: 0% (0 de 4) (13/11)',
+      'Pago por lead: 50% (4 de 8) (10/11)',
+    ]);
+    expect(pontos(container).some((t) => t.includes('(11/11)'))).toBe(false);
+
+    // Nada no x do dia vazio: nem ponto, nem vértice de linha. O dia segue no eixo.
+    const x = (idx) => 50 + (idx / 3) * 730;
+    const circulos = Array.from(grafico(container).querySelectorAll('circle')).map((c) => c.getAttribute('cx'));
+    expect(circulos).not.toContain(String(x(1)));
+    const vertices = Array.from(grafico(container).querySelectorAll('polyline')).flatMap((l) => l.getAttribute('points').split(' '));
+    expect(vertices.some((v) => v.startsWith(`${x(1)},`))).toBe(false);
+    expect(Array.from(grafico(container).querySelectorAll('text')).map((t) => t.textContent)).toContain('11/11');
+
+    // A linha se quebra: por PIX = [10/11] e [12/11, 13/11]; por lead = [10/11] e [13/11].
+    expect(linhasDaCor(container, '#10b981').map((l) => l.length)).toEqual([1, 2]);
+    expect(linhasDaCor(container, '#3b82f6').map((l) => l.length)).toEqual([1, 1]);
   });
 });
