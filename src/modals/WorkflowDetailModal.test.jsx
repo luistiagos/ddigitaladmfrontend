@@ -62,7 +62,7 @@ describe('WorkflowDetailModal — botões por estado do workflow', () => {
     renderModal();
 
     // Espera o carregamento terminar.
-    await screen.findByText(/Steps enviados/i);
+    await screen.findByText(/^Steps \(\d+\)$/i);
 
     expect(screen.getByRole('button', { name: BTN.pausar })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: BTN.retomar })).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe('WorkflowDetailModal — botões por estado do workflow', () => {
     api.get.mockResolvedValue({ data: makeWorkflow('completed') });
     renderModal();
 
-    await screen.findByText(/Steps enviados/i);
+    await screen.findByText(/^Steps \(\d+\)$/i);
 
     // Os 4 botões de controle não devem existir.
     expect(screen.queryByRole('button', { name: BTN.pausar })).toBeNull();
@@ -94,7 +94,7 @@ describe('WorkflowDetailModal — botões por estado do workflow', () => {
     async (status) => {
       api.get.mockResolvedValue({ data: makeWorkflow(status) });
       renderModal();
-      await screen.findByText(/Steps enviados/i);
+      await screen.findByText(/^Steps \(\d+\)$/i);
       expect(screen.queryByRole('button', { name: BTN.cancelar })).toBeNull();
       expect(screen.getByRole('button', { name: BTN.tentar })).toBeInTheDocument();
     }
@@ -107,7 +107,7 @@ describe('WorkflowDetailModal — "Tentar novamente"', () => {
     api.post.mockResolvedValue({ data: { success: true } });
     renderModal();
 
-    await screen.findByText(/Steps enviados/i);
+    await screen.findByText(/^Steps \(\d+\)$/i);
     await userEvent.click(screen.getByRole('button', { name: BTN.tentar }));
 
     await waitFor(() => {
@@ -123,7 +123,7 @@ describe('WorkflowDetailModal — "Tentar novamente"', () => {
     api.post.mockResolvedValue({ data: { success: true } });
     renderModal();
 
-    await screen.findByText(/Steps enviados/i);
+    await screen.findByText(/^Steps \(\d+\)$/i);
     await userEvent.click(screen.getByRole('button', { name: BTN.tentar }));
 
     await waitFor(() => {
@@ -132,5 +132,117 @@ describe('WorkflowDetailModal — "Tentar novamente"', () => {
     const url = api.post.mock.calls[0][0];
     expect(url).toContain('/retry-step');
     expect(url).not.toContain('run-planner-for-lead');
+  });
+});
+
+// Bug docs/modules/remarketing/bugs/2026-11-24-detalhe-do-workflow-mostra-email-como-enviado-sem-destinatario-nem-motivo.md (T3)
+function withSteps(sentSteps, events = []) {
+  const wf = makeWorkflow('completed');
+  wf.live_state.sent_steps = sentSteps;
+  wf.live_state.events = events;
+  return wf;
+}
+
+function step(over) {
+  return {
+    step_id: 'rs-1',
+    channel: 'email',
+    cycle: 1,
+    status: 'sent',
+    idempotency_key: 'k',
+    sent_at_iso: '2026-11-25T14:20:00+00:00',
+    provider_message_id: null,
+    metadata: {},
+    ...over,
+  };
+}
+
+describe('WorkflowDetailModal — steps com destino e motivo', () => {
+  it('step skipped com reason mostra o motivo traduzido e o destinatario', async () => {
+    api.get.mockResolvedValue({
+      data: withSteps([
+        step({ status: 'skipped', reason: 'user_has_purchase', recipient: 'cliente@exemplo.com' }),
+      ]),
+    });
+    renderModal();
+    await screen.findByText(/^Steps \(1\)$/i);
+    expect(screen.getByText('não enviado: lead já comprou')).toBeInTheDocument();
+    expect(screen.getByText(/para cliente@exemplo\.com/)).toBeInTheDocument();
+    expect(screen.getByText('skipped')).toBeInTheDocument();
+    expect(screen.queryByText(/override de teste/i)).toBeNull();
+  });
+
+  it('historico antigo: status sent com metadata.sent=false aparece como nao enviado com o motivo do metadata', async () => {
+    api.get.mockResolvedValue({
+      data: withSteps([
+        step({ status: 'sent', metadata: { ok: true, sent: false, reason: 'already_sent_dedup' } }),
+      ]),
+    });
+    renderModal();
+    await screen.findByText(/^Steps \(1\)$/i);
+    expect(screen.getByText('não enviado')).toBeInTheDocument();
+    expect(screen.queryByText('sent')).toBeNull();
+    expect(screen.getByText('não enviado: já enviado antes para este destino')).toBeInTheDocument();
+  });
+
+  it('step sent de verdade nao mostra motivo', async () => {
+    api.get.mockResolvedValue({
+      data: withSteps([
+        step({
+          status: 'sent',
+          reason: 'sent',
+          metadata: { ok: true, sent: true, reason: 'sent' },
+          recipient: 'a@b.com',
+        }),
+      ]),
+    });
+    renderModal();
+    await screen.findByText(/^Steps \(1\)$/i);
+    expect(screen.getByText('sent')).toBeInTheDocument();
+    expect(screen.queryByText(/não enviado/)).toBeNull();
+  });
+
+  it('recipient_overridden mostra a marca de override de teste', async () => {
+    api.get.mockResolvedValue({
+      data: withSteps([
+        step({ status: 'sent', recipient: 'dono@exemplo.com', recipient_overridden: true }),
+      ]),
+    });
+    renderModal();
+    await screen.findByText(/^Steps \(1\)$/i);
+    expect(screen.getByText(/para dono@exemplo\.com/)).toBeInTheDocument();
+    expect(screen.getByText(/override de teste/i)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['checkout_pending', 'checkout_in_progress', 'não enviado: cliente no checkout (PIX aberto)'],
+    ['conversation_active', 'customer_in_conversation', 'não enviado: cliente em conversa com o agente'],
+    ['failed', 'sendmail_failed', 'falha no envio (vai para a fila de retentativa)'],
+    ['failed', 'http 400', 'http 400'],
+  ])('status %s com reason %s mostra "%s"', async (status, reason, texto) => {
+    api.get.mockResolvedValue({ data: withSteps([step({ channel: 'whatsapp', status, reason })]) });
+    renderModal();
+    await screen.findByText(/^Steps \(1\)$/i);
+    expect(screen.getByText(texto)).toBeInTheDocument();
+  });
+
+  it('timeline le event_type e message gravados pelo Temporal', async () => {
+    api.get.mockResolvedValue({
+      data: withSteps(
+        [],
+        [
+          {
+            event_type: 'step_dispatched',
+            message: 'email step rs-1 skipped — user_has_purchase',
+            at_iso: '2026-11-25T14:20:00+00:00',
+            metadata: {},
+          },
+        ]
+      ),
+    });
+    renderModal();
+    await screen.findByText(/^Steps \(0\)$/i);
+    expect(screen.getByText('step_dispatched')).toBeInTheDocument();
+    expect(screen.getByText('email step rs-1 skipped — user_has_purchase')).toBeInTheDocument();
   });
 });

@@ -30,8 +30,34 @@ function stepStatusVariant(status) {
   if (s === 'sent') return 'green';
   if (s === 'queued') return 'blue';
   if (s === 'failed') return 'red';
-  if (s === 'unknown') return 'yellow';
+  if (['unknown', 'checkout_pending', 'conversation_active'].includes(s)) return 'yellow';
   return 'gray';
+}
+
+// Motivo de um step que não enviou, como o backend (/remarket_v2) e o
+// workflow do Temporal o gravam. Código desconhecido aparece cru.
+const REASON_LABELS = {
+  user_has_purchase: 'não enviado: lead já comprou',
+  lead_status_purchase: 'não enviado: lead em Purchase',
+  already_sent_dedup: 'não enviado: já enviado antes para este destino',
+  sendmail_failed: 'falha no envio (vai para a fila de retentativa)',
+  number_not_exists: 'número inexistente',
+  checkout_in_progress: 'não enviado: cliente no checkout (PIX aberto)',
+  customer_in_conversation: 'não enviado: cliente em conversa com o agente',
+};
+
+const NOT_SENT = 'não enviado';
+
+// Desfecho exibido de um step. Histórico gravado antes da correção do
+// Temporal tem `status: sent` com `metadata.sent === false` (a rota não
+// enviou): aparece como não enviado, com o motivo do metadata.
+function stepOutcome(st) {
+  const raw = st?.status || '';
+  const status = raw === 'sent' && st?.metadata?.sent === false ? NOT_SENT : raw;
+  const delivered = status === 'sent' || status === 'queued';
+  const code = st?.reason || st?.metadata?.reason || '';
+  const reason = delivered || !code ? '' : REASON_LABELS[code] || code;
+  return { status, reason };
 }
 
 // Status em que o workflow já terminou no Temporal — não aceita mais
@@ -206,33 +232,45 @@ export default function WorkflowDetailModal({ workflowId, onClose, onChange }) {
                 </div>
               )}
 
-              {/* Sent steps */}
+              {/* Steps despachados (enviados ou não) */}
               <div>
                 <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
-                  Steps enviados ({sentSteps.length})
+                  Steps ({sentSteps.length})
                 </h3>
                 {sentSteps.length === 0 && (
-                  <p className="text-xs text-gray-500">Nenhum step enviado ainda.</p>
+                  <p className="text-xs text-gray-500">Nenhum step despachado ainda.</p>
                 )}
                 <div className="space-y-1.5">
-                  {sentSteps.map((st, i) => (
-                    <div
-                      key={`${st.step_id}-${st.cycle}-${i}`}
-                      className="bg-gray-700/30 border border-gray-700 rounded-lg px-3 py-2 flex items-center gap-3 text-xs"
-                    >
-                      <ChannelIcon channel={st.channel} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white font-medium truncate">
-                          {st.step_id} <span className="text-gray-500">· ciclo {st.cycle}</span>
+                  {sentSteps.map((st, i) => {
+                    const outcome = stepOutcome(st);
+                    return (
+                      <div
+                        key={`${st.step_id}-${st.cycle}-${i}`}
+                        className="bg-gray-700/30 border border-gray-700 rounded-lg px-3 py-2 flex items-center gap-3 text-xs"
+                      >
+                        <ChannelIcon channel={st.channel} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white font-medium truncate">
+                            {st.step_id} <span className="text-gray-500">· ciclo {st.cycle}</span>
+                          </div>
+                          <div className="text-gray-400 truncate">
+                            {fmt(st.sent_at_iso)}
+                            {st.provider_message_id && ` · id ${st.provider_message_id}`}
+                          </div>
+                          {st.recipient && (
+                            <div className="text-gray-400 truncate">
+                              para {st.recipient}
+                              {st.recipient_overridden && (
+                                <span className="text-yellow-400"> (override de teste)</span>
+                              )}
+                            </div>
+                          )}
+                          {outcome.reason && <div className="text-yellow-300">{outcome.reason}</div>}
                         </div>
-                        <div className="text-gray-400 truncate">
-                          {fmt(st.sent_at_iso)}
-                          {st.provider_message_id && ` · id ${st.provider_message_id}`}
-                        </div>
+                        <Badge variant={stepStatusVariant(outcome.status)}>{outcome.status}</Badge>
                       </div>
-                      <Badge variant={stepStatusVariant(st.status)}>{st.status}</Badge>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -246,8 +284,10 @@ export default function WorkflowDetailModal({ workflowId, onClose, onChange }) {
                     {events.map((ev, i) => (
                       <div key={i} className="text-xs flex items-start gap-2 py-1 border-b border-gray-700/50 last:border-0">
                         <span className="text-gray-500 font-mono shrink-0">{fmt(ev.at_iso || ev.timestamp_iso)}</span>
-                        <span className="text-violet-300 shrink-0">{ev.event || ev.name}</span>
-                        {ev.detail && <span className="text-gray-400 truncate">{ev.detail}</span>}
+                        <span className="text-violet-300 shrink-0">{ev.event_type || ev.event || ev.name}</span>
+                        {(ev.message || ev.detail) && (
+                          <span className="text-gray-400 truncate">{ev.message || ev.detail}</span>
+                        )}
                       </div>
                     ))}
                   </div>
