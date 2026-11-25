@@ -416,6 +416,10 @@ function Modelo({ modelo, chaves, tipos, onMudou }) {
 
 // ── Lista de um tipo ──────────────────────────────────────────────────────────
 
+// Item da lista que e o modelo do .env do tipo (`llm_provider.REF_ENV`, gravado no banco como
+// model_pk NULL). Change docs/modules/chatbot-whatsapp/changes/2026-11-25-modelo-do-env-como-elo-da-lista/
+const ENV = '.env';
+
 function ListaTipo({ tipo, modelos, onSalvo }) {
   const salvos = tipo.itens.map((i) => i.model_pk);
   const [ordem, setOrdem] = useState(salvos);
@@ -425,10 +429,13 @@ function ListaTipo({ tipo, modelos, onSalvo }) {
   const [msg, setMsg] = useState(null);
 
   const chaveSalvos = salvos.join(',');
-  useEffect(() => { setOrdem(chaveSalvos ? chaveSalvos.split(',').map(Number) : []); }, [chaveSalvos]);
+  useEffect(() => {
+    setOrdem(chaveSalvos ? chaveSalvos.split(',').map((v) => (v === ENV ? ENV : Number(v))) : []);
+  }, [chaveSalvos]);
 
   const porId = Object.fromEntries(modelos.map((m) => [m.id, m]));
-  const refDe = (pk) => porId[pk]?.ref || tipo.itens.find((i) => i.model_pk === pk)?.ref || `#${pk}`;
+  const rotuloEnv = `Modelo do .env (${tipo.modelo_env})`;
+  const refDe = (pk) => (pk === ENV ? rotuloEnv : null) || porId[pk]?.ref || tipo.itens.find((i) => i.model_pk === pk)?.ref || `#${pk}`;
   const mudou = ordem.join(',') !== chaveSalvos;
   const principalMudou = ordem.length > 0 && ordem[0] !== salvos[0];
   const principalSalvo = tipo.itens[0];
@@ -457,6 +464,7 @@ function ListaTipo({ tipo, modelos, onSalvo }) {
   }
 
   const disponiveis = modelos.filter((m) => !ordem.includes(m.id));
+  const envDisponivel = !ordem.includes(ENV);
 
   return (
     <div data-testid={`tipo-${tipo.tipo}`} className="bg-gray-900/30 border border-gray-700/60 rounded-lg p-4 space-y-2">
@@ -498,15 +506,16 @@ function ListaTipo({ tipo, modelos, onSalvo }) {
       )}
 
       <div className="flex flex-wrap gap-2 items-center">
-        {disponiveis.length > 0 && (
+        {(envDisponivel || disponiveis.length > 0) && (
           <>
             <select className={`${campoBase} w-auto`} aria-label={`Adicionar modelo em ${tipo.tipo}`}
               value={adicionar} onChange={(e) => setAdicionar(e.target.value)}>
               <option value="">Adicionar modelo…</option>
+              {envDisponivel && <option value={ENV}>{rotuloEnv}</option>}
               {disponiveis.map((m) => <option key={m.id} value={m.id}>{m.ref}</option>)}
             </select>
             <button type="button" className={botaoSec} disabled={!adicionar}
-              onClick={() => { setOrdem((o) => [...o, Number(adicionar)]); setAdicionar(''); }}>
+              onClick={() => { setOrdem((o) => [...o, adicionar === ENV ? ENV : Number(adicionar)]); setAdicionar(''); }}>
               <Plus className="h-3.5 w-3.5" /> Adicionar
             </button>
           </>

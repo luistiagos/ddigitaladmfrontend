@@ -189,4 +189,54 @@ describe('LlmModels', () => {
     await user.click(await screen.findByRole('button', { name: `Excluir modelo ${MODELO.ref}` }));
     expect(await within(screen.getByTestId('modelo-7')).findByRole('alert')).toHaveTextContent(msg);
   });
+
+  // Change docs/modules/chatbot-whatsapp/changes/2026-11-25-modelo-do-env-como-elo-da-lista/ (EARS-1)
+  it('oferece o .env na combo de cada tipo', async () => {
+    montarApi({ modelos: [MODELO], chaves: { 7: [CHAVE_PUBLICA] } });
+    const user = userEvent.setup();
+    render(<LlmModels />);
+    await screen.findByTestId('tipo-vendas');
+    for (const tipo of TIPOS) {
+      const modelo = tipo === 'router' ? 'deepseek-v4-flash' : 'deepseek-v4-pro';
+      const combo = within(screen.getByTestId(`tipo-${tipo}`)).getByLabelText(`Adicionar modelo em ${tipo}`);
+      expect(within(combo).getByRole('option', { name: `Modelo do .env (${modelo})` })).toHaveValue('.env');
+    }
+
+    // Adicionado depois do cadastrado: o PUT manda ".env" na posicao, e a opcao some da combo.
+    const cartao = screen.getByTestId('tipo-vendas');
+    const combo = within(cartao).getByLabelText('Adicionar modelo em vendas');
+    await user.selectOptions(combo, '7');
+    await user.click(within(cartao).getByRole('button', { name: /adicionar/i }));
+    await user.selectOptions(combo, '.env');
+    await user.click(within(cartao).getByRole('button', { name: /adicionar/i }));
+    expect(within(cartao).getByText('Modelo do .env (deepseek-v4-pro)')).toBeInTheDocument();
+    expect(within(cartao).queryByRole('option', { name: /Modelo do \.env/ })).toBeNull();
+    await user.click(within(cartao).getByRole('button', { name: 'Subir Modelo do .env (deepseek-v4-pro)' }));
+    await user.click(within(cartao).getByRole('button', { name: /salvar lista/i }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/admin/llm/chains', {
+      tipo: 'vendas', modelos: ['.env', 7],
+    }));
+  });
+
+  it('lista salva com o .env volta do servidor com o rotulo e sem virar numero', async () => {
+    const tipos = tiposVazios().map((t) => (t.tipo === 'consulta' ? {
+      ...t, usando_env: false, itens: [
+        { position: 1, model_pk: 7, ref: MODELO.ref },
+        { position: 2, model_pk: '.env', ref: '.env' },
+      ],
+    } : t));
+    montarApi({ modelos: [MODELO], chaves: { 7: [CHAVE_PUBLICA] }, tipos });
+    const user = userEvent.setup();
+    render(<LlmModels />);
+    const cartao = await screen.findByTestId('tipo-consulta');
+    expect(await within(cartao).findByText('Modelo do .env (deepseek-v4-pro)')).toBeInTheDocument();
+    expect(within(cartao).getByText('fallback 1')).toBeInTheDocument();
+    expect(within(cartao).queryByText(/NaN/)).toBeNull();
+    expect(within(cartao).queryByRole('button', { name: /salvar lista/i })).toBeNull();   // nada mudou
+    expect(within(cartao).queryByLabelText('Adicionar modelo em consulta')).toBeNull();   // nada a oferecer
+
+    await user.click(within(cartao).getByRole('button', { name: 'Tirar Modelo do .env (deepseek-v4-pro) da lista' }));
+    expect(within(within(cartao).getByLabelText('Adicionar modelo em consulta'))
+      .getByRole('option', { name: 'Modelo do .env (deepseek-v4-pro)' })).toBeInTheDocument();
+  });
 });
