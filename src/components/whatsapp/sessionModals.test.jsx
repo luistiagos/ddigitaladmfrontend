@@ -84,6 +84,119 @@ describe('AgentModal — a tela de sessões não mudou', () => {
   });
 });
 
+describe('AgentModal — fase da conversa', () => {
+  // Spec: docs/modules/chatbot-whatsapp/changes/2026-11-25-fase-da-conversa-escolhida-no-painel/
+  const URL_FASE = `/admin/wpp/sessions/${encodeURIComponent('111@lid')}/phase`;
+  const faseNaRota = (fase) => api.get.mockImplementation((url) => (url === URL_FASE
+    ? Promise.resolve({ data: { success: true, lid: '111@lid', fase } })
+    : Promise.resolve({ data: {} })));
+  const abrir = (props = {}) => render(
+    <AgentModal session={SESSAO} agents={FALLBACK_AGENTS} onClose={vi.fn()} onSaved={vi.fn()} {...props} />,
+  );
+  const comboFase = () => screen.getByLabelText('Fase');
+
+  it('AgentModal mostra a combo de fase com a fase atual', async () => {
+    faseNaRota('pos_venda');
+    abrir();
+
+    await waitFor(() => expect(comboFase()).not.toBeDisabled());
+    expect(api.get).toHaveBeenCalledWith(URL_FASE);
+    expect(comboFase()).toHaveValue('pos_venda');
+    expect(screen.getByLabelText('Agent')).toBeInTheDocument();
+    const opcoes = Array.from(comboFase().options).map((o) => [o.value, o.textContent]);
+    expect(opcoes).toEqual([['', 'Automática'], ['pre_venda', 'Pré-venda'], ['pos_venda', 'Pós-venda']]);
+  });
+
+  it('sessao sem escolha mostra Automatica selecionada', async () => {
+    faseNaRota('');
+    abrir();
+    await waitFor(() => expect(comboFase()).not.toBeDisabled());
+    expect(comboFase()).toHaveValue('');
+  });
+
+  it('Salvar envia fase so quando mudou: trocar so a fase', async () => {
+    faseNaRota('');
+    abrir();
+    await waitFor(() => expect(comboFase()).not.toBeDisabled());
+    await userEvent.selectOptions(comboFase(), 'pos_venda');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      `/admin/wpp/sessions/${encodeURIComponent('111@lid')}/agent`,
+      { agent_name: 'HUMAN_PENDING', fase: 'pos_venda' },
+    ));
+  });
+
+  it('voltar a Automatica envia fase vazia, junto do chamado', async () => {
+    faseNaRota('pre_venda');
+    abrir({ ticketId: 9 });
+    await waitFor(() => expect(comboFase()).not.toBeDisabled());
+    await userEvent.selectOptions(comboFase(), '');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      expect.stringContaining('/agent'),
+      { agent_name: 'HUMAN_PENDING', ticket_id: 9, fase: '' },
+    ));
+  });
+
+  it('trocar so o agente nao manda fase (nao regrava a escolha nem o autor)', async () => {
+    faseNaRota('pos_venda');
+    abrir();
+    await waitFor(() => expect(comboFase()).not.toBeDisabled());
+    await userEvent.selectOptions(screen.getByLabelText('Agent'), 'PS2_AGENT');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      expect.stringContaining('/agent'),
+      { agent_name: 'PS2_AGENT' },
+    ));
+  });
+
+  it('GET falhou -> combo desabilitada e Salvar sem fase', async () => {
+    api.get.mockRejectedValue({ response: { data: { success: false, error: 'Erro ao ler a fase da conversa.' } } });
+    abrir();
+
+    expect(await screen.findByText(/Erro ao ler a fase da conversa\./)).toBeInTheDocument();
+    expect(comboFase()).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+      expect.stringContaining('/agent'),
+      { agent_name: 'HUMAN_PENDING' },
+    ));
+  });
+
+  it('resposta sem fase reconhecivel conta como falha, nunca como Automatica', async () => {
+    api.get.mockResolvedValue({ data: { success: true, fase: 'outra' } });
+    abrir();
+    expect(await screen.findByText(/Não foi possível ler a fase/)).toBeInTheDocument();
+    expect(comboFase()).toBeDisabled();
+  });
+
+  it('falha do agente com a fase gravada diz que a fase ficou e nao fecha', async () => {
+    faseNaRota('');
+    api.patch.mockRejectedValue({ response: { status: 500, data: {
+      success: false, error: 'Erro ao trocar o agente da sessao.', fase_gravada: true,
+    } } });
+    const onClose = vi.fn();
+    abrir({ onClose });
+    await waitFor(() => expect(comboFase()).not.toBeDisabled());
+    await userEvent.selectOptions(comboFase(), 'pos_venda');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    expect(await screen.findByText(/A fase foi gravada, mas o agent não foi trocado/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // A fase gravada passa a ser a atual: o novo Salvar nao a reenvia.
+    api.patch.mockResolvedValue({ data: { current_agent: 'HUMAN_PENDING' } });
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    await waitFor(() => expect(api.patch).toHaveBeenLastCalledWith(
+      expect.stringContaining('/agent'),
+      { agent_name: 'HUMAN_PENDING' },
+    ));
+  });
+});
+
 describe('HistoryModal — horário do histórico', () => {
   it('o horário da mensagem é lido como UTC, não como hora local', async () => {
     api.get.mockResolvedValue({ data: {
