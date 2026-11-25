@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -61,8 +61,18 @@ const mockMetaSpend = {
   },
 };
 
-function setupMocks({ stats = mockStats, meta = mockMetaSpend } = {}) {
+// Rota da taxa de PIX de leads novos. Ela casa `/admin/dashboard` também, então vem ANTES desse
+// teste nos mocks. Padrão: rejeitada, que é o cenário da EARS-17 (o resto da tela segue igual).
+const pixRejeitada = () => Promise.reject(new Error('rota da taxa fora'));
+
+function respostaPix(pix, url) {
+  const r = typeof pix === 'function' ? pix(url) : pix;
+  return r instanceof Promise ? r : Promise.resolve({ data: r });
+}
+
+function setupMocks({ stats = mockStats, meta = mockMetaSpend, pix = pixRejeitada } = {}) {
   api.get.mockImplementation((url) => {
+    if (url.includes('/admin/dashboard/pix-leads-novos')) return respostaPix(pix, url);
     if (url.includes('/admin/dashboard')) {
       return Promise.resolve({ data: stats });
     }
@@ -253,6 +263,7 @@ function setupLeads({ leads = (url) => (url.includes('lead_unico=1') ? leadsFilt
       const r = leads(url);
       return r instanceof Promise ? r : Promise.resolve({ data: r });
     }
+    if (url.includes('/admin/dashboard/pix-leads-novos')) return pixRejeitada();
     if (url.includes('/admin/dashboard')) return Promise.resolve({ data: stats });
     if (url.includes('/admin/meta/ad-spend')) return Promise.resolve({ data: mockMetaSpend });
     return Promise.reject(new Error(`Rota não mapeada: ${url}`));
@@ -420,5 +431,218 @@ describe('Dashboard — aba "Funil de leads" (T5)', () => {
     expect(pontos(container)).toContain('Entraram na página: 141 (01/11)');
     expect(pontos(container).some((t) => t.includes(': 98 '))).toBe(false);
     expect(screen.queryByText(/Recorte ativo/)).not.toBeInTheDocument();
+  });
+});
+
+// Cartão "PIX de leads novos" (T3 da change
+// docs/modules/telemetria/changes/2026-11-24-taxa-de-pix-pago-de-leads-novos/). A resposta segue a
+// porta 1 do design, que é o que `pix_leads_novos.calcular` monta no backend.
+function blocoPix({ pix = [0, 0], lead = [0, 0], aguardando = [0, 0], excluidos = 0, semId = 0 } = {}) {
+  const t = ([num, den]) => ({ num, den, pct: den ? Math.round((num * 1000) / den) / 10 : null });
+  return {
+    por_pix: t(pix),
+    por_lead: t(lead),
+    aguardando: { pix: aguardando[0], leads: aguardando[1] },
+    excluidos_compra_anterior: excluidos,
+    sem_identificacao: semId,
+  };
+}
+
+function respostaPixOk({ inicio, fim, desde = '2026-07-01', total, porDia = [] }) {
+  return {
+    disponivel: true,
+    versao_medicao: 'pix-leads-novos-v1',
+    periodo: { inicio, fim },
+    store_id: null,
+    cobertura_desde: desde,
+    maturidade_min: 60,
+    total,
+    por_dia: porDia,
+  };
+}
+
+// Os totais da medição da spec (10-23/11): 162 de 270 PIX, 169 de 230 leads, em dois dias.
+const pixMedido = respostaPixOk({
+  inicio: '2026-11-10',
+  fim: '2026-11-11',
+  total: blocoPix({ pix: [162, 270], lead: [169, 230], aguardando: [4, 3], excluidos: 21, semId: 1 }),
+  porDia: [
+    { dia: '2026-11-10', ...blocoPix({ pix: [100, 170], lead: [100, 140], aguardando: [4, 3], excluidos: 12, semId: 1 }) },
+    { dia: '2026-11-11', ...blocoPix({ pix: [62, 100], lead: [69, 90], excluidos: 9 }) },
+  ],
+});
+
+const ERRO_PIX = 'não foi possível calcular a taxa de PIX de leads novos';
+const chamadasPix = () => api.get.mock.calls.map(([u]) => u).filter((u) => u.includes('/admin/dashboard/pix-leads-novos'));
+const paramsDa = (url) => new URLSearchParams(url.split('?')[1]);
+const secaoPix = () => screen.getByText('PIX de leads novos').parentElement;
+
+describe('Dashboard — cartão "PIX de leads novos" (T3)', () => {
+  beforeEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  // EARS-1: taxa por PIX do período e da loja selecionados, com "N de M".
+  it('cartao_pix_leads_novos_mostra_taxa_por_pix', async () => {
+    setupMocks({
+      pix: pixMedido,
+      stats: { ...mockStats, stores_with_sales: [{ store_id: 7, store_name: 'Loja PS2', count: 1, total: 1 }] },
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    await waitFor(() => expect(within(secaoPix()).getByText('60%')).toBeInTheDocument());
+    expect(within(secaoPix()).getByText('PIX pago — por PIX')).toBeInTheDocument();
+    expect(within(secaoPix()).getByText('162 de 270 PIX')).toBeInTheDocument();
+
+    // Período da tela (Hoje), sem loja.
+    const primeira = paramsDa(chamadasPix().at(-1));
+    expect(primeira.get('start_date')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(primeira.get('end_date')).toBe(primeira.get('start_date'));
+    expect(primeira.has('store_id')).toBe(false);
+
+    // Loja escolhida vai junto.
+    await screen.findByRole('option', { name: 'Loja PS2' });
+    fireEvent.change(screen.getByLabelText('Filtrar loja'), { target: { value: '7' } });
+    await waitFor(() => expect(paramsDa(chamadasPix().at(-1)).get('store_id')).toBe('7'));
+
+    // Outro período: nova busca com as datas novas.
+    const inputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    fireEvent.change(inputs[0], { target: { value: '2026-11-10' } });
+    fireEvent.change(inputs[1], { target: { value: '2026-11-11' } });
+    await waitFor(() => {
+      const p = paramsDa(chamadasPix().at(-1));
+      expect([p.get('start_date'), p.get('end_date'), p.get('store_id')]).toEqual(['2026-11-10', '2026-11-11', '7']);
+    });
+    await waitFor(() => expect(within(secaoPix()).getByText('60%')).toBeInTheDocument());
+  });
+
+  // EARS-2: no mesmo cartão, a taxa por lead, com os leads que pagaram e os contados.
+  it('cartao_pix_leads_novos_mostra_taxa_por_lead', async () => {
+    setupMocks({ pix: pixMedido });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    await waitFor(() => expect(within(secaoPix()).getByText('73,5%')).toBeInTheDocument());
+    expect(within(secaoPix()).getByText('PIX pago — por lead')).toBeInTheDocument();
+    expect(within(secaoPix()).getByText('169 de 230 leads')).toBeInTheDocument();
+  });
+
+  // EARS-14: período sem PIX contado mostra "—" e o aviso, nunca 0%.
+  it('cartao_pix_leads_novos_vazio_sem_zero', async () => {
+    setupMocks({
+      pix: respostaPixOk({
+        inicio: '2026-11-25',
+        fim: '2026-11-25',
+        total: blocoPix({ aguardando: [2, 2] }),
+        porDia: [{ dia: '2026-11-25', ...blocoPix({ aguardando: [2, 2] }) }],
+      }),
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    await waitFor(() => expect(within(secaoPix()).getAllByText('—')).toHaveLength(2));
+    expect(within(secaoPix()).getAllByText('nenhum PIX de lead novo no período')).toHaveLength(2);
+    expect(secaoPix().textContent).not.toMatch(/%/);
+    expect(secaoPix().textContent).not.toMatch(/0 de 0/);
+    // Os PIX ainda aguardando continuam visíveis (EARS-15).
+    expect(within(secaoPix()).getByText(/^2 PIX aguardando \(2 leads\)/)).toBeInTheDocument();
+  });
+
+  // EARS-16: rota fora (backend antigo), `disponivel: false`, 400 ou resposta sem o bloco: a mensagem
+  // fixa, sem número e sem o motivo técnico.
+  it('pix_leads_novos_erro_sem_numero', async () => {
+    for (const falha of [
+      () => Promise.reject({ response: { status: 404, data: {} } }),
+      () => ({ disponivel: false, versao_medicao: 'pix-leads-novos-v1', motivo: 'falha no calculo (OperationalError)' }),
+      () => Promise.reject({ response: { status: 400, data: { error: 'start_date invalida: use AAAA-MM-DD' } } }),
+      () => ({ disponivel: true, versao_medicao: 'pix-leads-novos-v1' }),
+    ]) {
+      cleanup();
+      vi.clearAllMocks();
+      setupMocks({ pix: falha });
+      render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+      await waitFor(() => expect(within(secaoPix()).getByText(ERRO_PIX)).toBeInTheDocument());
+      expect(secaoPix().textContent).not.toMatch(/\d/);
+      expect(secaoPix().textContent).not.toMatch(/OperationalError|invalida/);
+    }
+  });
+
+  // EARS-17: a taxa rejeitada ou pendurada não segura nem derruba os cartões de Vendas.
+  it('pix_leads_novos_falha_nao_derruba_os_outros_cartoes', async () => {
+    for (const [pix, pendurada] of [[pixRejeitada, false], [() => new Promise(() => {}), true]]) {
+      cleanup();
+      vi.clearAllMocks();
+      setupMocks({ pix });
+      render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+      const rotulo = await screen.findByText('Vendas Aprovadas');
+      expect(within(rotulo.closest('.rounded-xl')).getByText('15')).toBeInTheDocument();
+      expect(screen.getByText('Pagamentos Falhos')).toBeInTheDocument();
+      expect(screen.getByText('Gasto Facebook Ads')).toBeInTheDocument();
+      expect(chamadasPix()).toHaveLength(1);
+      if (pendurada) {
+        // Ainda carregando: os dois esqueletos, nenhum número.
+        expect(secaoPix().querySelectorAll('.animate-pulse')).toHaveLength(2);
+        expect(secaoPix().textContent).not.toMatch(/\d/);
+      } else {
+        await waitFor(() => expect(within(secaoPix()).getByText(ERRO_PIX)).toBeInTheDocument());
+      }
+    }
+  });
+
+  // EARS-15 e EARS-18 na tela (as provas declaradas delas são do backend): contadores, e o "desde"
+  // só quando a cobertura corta o começo do período.
+  it('cobertura parcial e contadores do cartao de PIX de leads novos', async () => {
+    const junho = respostaPixOk({
+      inicio: '2026-06-20',
+      fim: '2026-07-02',
+      desde: '2026-07-01',
+      total: blocoPix({ pix: [3, 5], lead: [3, 4], excluidos: 1, semId: 1234 }),
+    });
+    setupMocks({ pix: (url) => (url.includes('start_date=2026-06-20') ? junho : pixMedido) });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    await waitFor(() => expect(within(secaoPix()).getByText('60%')).toBeInTheDocument());
+    expect(within(secaoPix()).getByText(
+      '4 PIX aguardando (3 leads) · 21 fora por compra anterior · 1 sem identificação',
+    )).toBeInTheDocument();
+    expect(secaoPix().textContent).not.toMatch(/desde/);
+
+    const inputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    fireEvent.change(inputs[0], { target: { value: '2026-06-20' } });
+    fireEvent.change(inputs[1], { target: { value: '2026-07-02' } });
+    await waitFor(() => expect(within(secaoPix()).getByText(
+      '0 PIX aguardando (0 leads) · 1 fora por compra anterior · 1.234 sem identificação · dados de PIX desde 01/07/2026',
+    )).toBeInTheDocument());
+    expect(within(secaoPix()).getByText('3 de 5 PIX')).toBeInTheDocument();
+  });
+
+  // Concorrência (design, varredura): a resposta atrasada de outro período é descartada pela chave.
+  it('resposta atrasada de outro periodo nunca vira numero no cartao de PIX', async () => {
+    let soltarHoje;
+    const hojePendente = new Promise((resolve) => { soltarHoje = resolve; });
+    setupMocks({
+      pix: (url) => {
+        if (url.includes('end_date=2026-11-12')) return new Promise(() => {});
+        return url.includes('start_date=2026-11-10') ? pixMedido : hojePendente;
+      },
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    await waitFor(() => expect(chamadasPix()).toHaveLength(1));
+
+    const inputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    fireEvent.change(inputs[0], { target: { value: '2026-11-10' } });
+    fireEvent.change(inputs[1], { target: { value: '2026-11-11' } });
+    await waitFor(() => expect(within(secaoPix()).getByText('60%')).toBeInTheDocument());
+
+    soltarHoje({ data: respostaPixOk({ inicio: '2026-11-25', fim: '2026-11-25', total: blocoPix({ pix: [1, 10], lead: [1, 10] }) }) });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(within(secaoPix()).getByText('60%')).toBeInTheDocument();
+    expect(secaoPix().textContent).not.toMatch(/10%|1 de 10/);
+
+    // Período novo ainda sem resposta: o número do anterior sai da tela na hora (carregando).
+    fireEvent.change(inputs[1], { target: { value: '2026-11-12' } });
+    await waitFor(() => expect(secaoPix().querySelectorAll('.animate-pulse')).toHaveLength(2));
+    expect(secaoPix().textContent).not.toMatch(/\d/);
   });
 });

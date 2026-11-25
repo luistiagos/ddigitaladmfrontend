@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { ShoppingCart, Clock, TrendingUp, Megaphone, Wallet, Receipt, DollarSign, AlertCircle, Loader2, XCircle, RotateCcw, ShieldAlert, Store, Percent, Layers, BarChart3, Users, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '@/services/api';
-import { formatCurrency, todayISO } from '@/utils/format';
+import { formatCurrency, formatDate, todayISO } from '@/utils/format';
 import { ERRO_LEAD_UNICO, recorteAusente } from '@/utils/leadUnico';
 
 const FINANCIAL_SERIES = [
@@ -148,6 +148,65 @@ function SectionTitle({ children }) {
   );
 }
 
+// Taxa de PIX pago de leads novos (change docs/modules/telemetria/changes/2026-11-24-taxa-de-pix-pago-de-leads-novos/).
+// Mensagem fixa da EARS-16: com o cálculo falho (rota fora, `disponivel: false`, 400), nenhum número.
+const ERRO_PIX_LEADS = 'não foi possível calcular a taxa de PIX de leads novos';
+const SEM_PIX_CONTADO = 'nenhum PIX de lead novo no período';
+
+const contagem = (n) => Number(n || 0).toLocaleString('pt-BR');
+// `pct` vem do backend com 1 casa, ou `null` com den 0, que vira "—" e nunca 0% (EARS-14).
+const taxa = (t) => (t?.pct == null ? '—' : `${Number(t.pct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`);
+
+// `estado`: null = carregando; `{erro}`; `{dados}` = resposta da porta 1 do design, já do período e da
+// loja atuais. Mostra o `total` (a soma dos dias, para bater com a aba do gráfico).
+function PixLeadsNovos({ estado }) {
+  if (!estado) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <SkeletonCard /><SkeletonCard />
+      </div>
+    );
+  }
+  if (estado.erro) {
+    return (
+      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-5 flex items-center gap-2">
+        <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+        <p className="text-xs text-red-300">{estado.erro}</p>
+      </div>
+    );
+  }
+  const { total, periodo, cobertura_desde: desde } = estado.dados;
+  const semPix = !total.por_pix?.den;
+  const detalhes = [
+    `${contagem(total.aguardando?.pix)} PIX aguardando (${contagem(total.aguardando?.leads)} leads)`,
+    `${contagem(total.excluidos_compra_anterior)} fora por compra anterior`,
+    `${contagem(total.sem_identificacao)} sem identificação`,
+  ];
+  // O backend manda a cobertura sempre; só importa quando corta o começo do período (EARS-18).
+  if (desde && periodo?.inicio && desde > periodo.inicio) detalhes.push(`dados de PIX desde ${formatDate(desde)}`);
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <KpiCard
+          icon={<Percent className="h-4 w-4" />}
+          label="PIX pago — por PIX"
+          value={taxa(total.por_pix)}
+          sub={semPix ? SEM_PIX_CONTADO : `${contagem(total.por_pix.num)} de ${contagem(total.por_pix.den)} PIX`}
+          color="green"
+        />
+        <KpiCard
+          icon={<Users className="h-4 w-4" />}
+          label="PIX pago — por lead"
+          value={taxa(total.por_lead)}
+          sub={semPix ? SEM_PIX_CONTADO : `${contagem(total.por_lead?.num)} de ${contagem(total.por_lead?.den)} leads`}
+          color="blue"
+        />
+      </div>
+      <p className="text-xs text-gray-500 mt-2">{detalhes.join(' · ')}</p>
+    </>
+  );
+}
+
 export default function Dashboard() {
   const [startDate, setStartDate] = useState(todayISO);
   const [endDate, setEndDate] = useState(todayISO);
@@ -172,6 +231,9 @@ export default function Dashboard() {
   const [leadUnico, setLeadUnico] = useState(false);
   // Resposta do funil de leads com a chave (parâmetros) que a pediu: só a do estado atual vira número.
   const [funilLeads, setFunilLeads] = useState(null);
+  // Taxa de PIX de leads novos, no mesmo formato `{chave, dados|erro}`. Fica aqui, e não no cartão,
+  // porque a aba "PIX pago (%)" do gráfico desenha a mesma resposta.
+  const [pixLeads, setPixLeads] = useState(null);
 
   function handlePresetChange(p) {
     setPreset(p);
@@ -237,6 +299,34 @@ export default function Dashboard() {
       })
       .finally(() => setLoadingFb(false));
   }, [startDate, endDate, selectedStoreId]);
+
+  // Taxa de PIX pago de leads novos: rota e estado próprios, então a falha ou a demora dela nunca
+  // segura os cartões de Vendas (EARS-17). A resposta de outro período ou loja é descartada pela chave.
+  const paramsPix = useMemo(() => {
+    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+    if (selectedStoreId) params.set('store_id', selectedStoreId);
+    return params.toString();
+  }, [startDate, endDate, selectedStoreId]);
+
+  useEffect(() => {
+    let ativo = true;
+    const chave = paramsPix;
+    api.get(`/admin/dashboard/pix-leads-novos?${chave}`)
+      .then((r) => {
+        if (!ativo) return;
+        const dados = r.data;
+        // Só `disponivel: true` com o bloco vira número; o resto é a mensagem fixa (EARS-16).
+        setPixLeads(dados?.disponivel === true && dados.total ? { chave, dados } : { chave, erro: ERRO_PIX_LEADS });
+      })
+      .catch(() => {
+        if (ativo) setPixLeads({ chave, erro: ERRO_PIX_LEADS });
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [paramsPix]);
+
+  const pixLeadsAtual = pixLeads?.chave === paramsPix ? pixLeads : null;
 
   const approvedTotal = stats?.approved_total || 0;                       // bruto
   const approvedNet = stats?.approved_total_net ?? stats?.approved_total ?? 0; // líquido
@@ -480,6 +570,12 @@ export default function Dashboard() {
             </>
           )}
         </div>
+      </div>
+
+      {/* PIX de leads novos — carrega sozinho, sem esperar nem segurar o /admin/dashboard */}
+      <div className="mb-6">
+        <SectionTitle>PIX de leads novos</SectionTitle>
+        <PixLeadsNovos estado={pixLeadsAtual} />
       </div>
 
       {/* Falhas / Estornos */}
