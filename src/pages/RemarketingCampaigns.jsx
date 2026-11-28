@@ -28,6 +28,7 @@ const EMPTY_STEP = {
   time_send: '',
   day_send: '',
   ord: '',
+  delay_from_previous: false,
 };
 
 const inputCls =
@@ -49,17 +50,22 @@ function ChannelBadge({ type }) {
   );
 }
 
+// O atraso conta do lead ou, com `delay_from_previous`, do despacho do step anterior.
+// `time_trigger_min` vazio vale 0 no planner (manageleads_temporal.step_request).
+// docs/modules/remarketing/changes/2026-11-27-step-de-cupom-uma-hora-depois-do-whatsapp/spec.md
 function timingLabel(step) {
   const parts = [];
-  if (step.time_trigger_min != null && step.time_trigger_min !== '') {
-    parts.push(`Atraso ${step.time_trigger_min}min`);
-  }
+  const delay =
+    step.time_trigger_min != null && step.time_trigger_min !== '' ? step.time_trigger_min : 0;
+  parts.push(
+    step.delay_from_previous ? `${delay}min após o step anterior` : `${delay}min a partir do lead`
+  );
   if (step.time_send) parts.push(`${step.time_send}`);
   if (step.day_send) parts.push(`dia ${step.day_send}`);
   if (step.days_cyclic && Number(step.days_cyclic) > 0) {
     parts.push(`repete cada ${step.days_cyclic}d`);
   }
-  return parts.length ? parts.join(' · ') : 'Sem timing definido';
+  return parts.join(' · ');
 }
 
 function StepEditor({ value, onChange }) {
@@ -125,7 +131,9 @@ function StepEditor({ value, onChange }) {
         </div>
       )}
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Atraso inicial (min)</label>
+        <label className="block text-xs text-gray-400 mb-1">
+          {value.delay_from_previous ? 'Atraso após o step anterior (min)' : 'Atraso após o lead (min)'}
+        </label>
         <input
           type="number"
           min="0"
@@ -145,6 +153,21 @@ function StepEditor({ value, onChange }) {
           placeholder="0 = sem repetição"
           className={inputCls}
         />
+      </div>
+      <div className="col-span-2">
+        <label className="inline-flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!value.delay_from_previous}
+            onChange={(e) => set('delay_from_previous', e.target.checked)}
+            className="accent-violet-500"
+          />
+          Contar o atraso a partir do step anterior
+        </label>
+        <p className="text-[10px] text-gray-500 mt-1">
+          Desmarcado, o atraso conta da criação do lead. Marcado, conta do despacho do step anterior
+          (mesmo se ele foi adiado pela janela ou falhou).
+        </p>
       </div>
       <div>
         <label className="block text-xs text-gray-400 mb-1">Horário preferido</label>
@@ -499,6 +522,7 @@ function CampaignStepsModal({ store, allStores, onClose }) {
       time_send: step.time_send || '',
       day_send: step.day_send ?? '',
       ord: step.ord ?? '',
+      delay_from_previous: !!step.delay_from_previous,
     });
     setFormError('');
   }
